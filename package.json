@@ -9,7 +9,10 @@
     "lint": "next lint",
     "sync": "node pipeline/sync.mjs",
     "setup-db": "node pipeline/setup-db.mjs",
-    "pipeline": "node pipeline/run.mjs"
+    "pipeline": "node pipeline/run.mjs",
+    "test": "npx playwright test",
+    "test:pipeline": "node tests/pipeline.mjs",
+    "test:heal": "node tests/self-heal.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
@@ -20,6 +23,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
     "autoprefixer": "^10.4.17",
