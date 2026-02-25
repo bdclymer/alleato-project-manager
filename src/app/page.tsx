@@ -26,36 +26,44 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
-      const [projects, rfis, submittals, budgets, ccos, ctcos, meetings, incidents, punchItems, inspections, recentProjects, openRFIs] =
-        await Promise.all([
-          supabase.from("projects").select("id", { count: "exact", head: true }),
-          supabase.from("rfis").select("id", { count: "exact", head: true }),
-          supabase.from("submittals").select("id", { count: "exact", head: true }),
-          supabase.from("budgets").select("id", { count: "exact", head: true }),
-          supabase.from("commitment_change_orders").select("id", { count: "exact", head: true }),
-          supabase.from("contract_change_orders").select("id", { count: "exact", head: true }),
-          supabase.from("meeting_minutes").select("id", { count: "exact", head: true }),
-          supabase.from("incidents").select("id", { count: "exact", head: true }).in("status", ["reported", "investigating"]),
-          supabase.from("punch_list_items").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
-          supabase.from("inspections").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
-          supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(5),
-          supabase.from("rfis").select("*, projects(name)").in("status", ["open", "Open"]).order("created_at", { ascending: false }).limit(5),
-        ]);
+      try {
+        const [projects, rfis, submittals, budgets, ccos, ctcos, meetings, incidents, punchItems, inspections, recentProjects, openRFIs] =
+          await Promise.all([
+            supabase.from("projects").select("id", { count: "exact", head: true }),
+            supabase.from("rfis").select("id", { count: "exact", head: true }),
+            supabase.from("submittals").select("id", { count: "exact", head: true }),
+            supabase.from("budgets").select("id", { count: "exact", head: true }),
+            supabase.from("commitment_change_orders").select("id", { count: "exact", head: true }),
+            supabase.from("contract_change_orders").select("id", { count: "exact", head: true }),
+            supabase.from("meeting_minutes").select("id", { count: "exact", head: true }),
+            supabase.from("incidents").select("id", { count: "exact", head: true }).in("status", ["reported", "investigating"]),
+            supabase.from("punch_list_items").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
+            supabase.from("inspections").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
+            supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(5),
+            supabase.from("rfis").select("*, projects(name)").in("status", ["open", "Open"]).order("created_at", { ascending: false }).limit(5),
+          ]);
 
-      setData({
-        projectCount: projects.count || 0,
-        rfiCount: rfis.count || 0,
-        submittalCount: submittals.count || 0,
-        budgetCount: budgets.count || 0,
-        ccoCount: ccos.count || 0,
-        ctcoCount: ctcos.count || 0,
-        meetingCount: meetings.count || 0,
-        incidentCount: incidents.count || 0,
-        punchCount: punchItems.count || 0,
-        inspectionCount: inspections.count || 0,
-        recentProjects: recentProjects.data || [],
-        openRFIs: openRFIs.data || [],
-      });
+        setData({
+          projectCount: projects.count || 0,
+          rfiCount: rfis.count || 0,
+          submittalCount: submittals.count || 0,
+          budgetCount: budgets.count || 0,
+          ccoCount: ccos.count || 0,
+          ctcoCount: ctcos.count || 0,
+          meetingCount: meetings.count || 0,
+          incidentCount: incidents.count || 0,
+          punchCount: punchItems.count || 0,
+          inspectionCount: inspections.count || 0,
+          recentProjects: recentProjects.data || [],
+          openRFIs: openRFIs.data || [],
+        });
+      } catch {
+        setData({
+          projectCount: 0, rfiCount: 0, submittalCount: 0, budgetCount: 0,
+          ccoCount: 0, ctcoCount: 0, meetingCount: 0, incidentCount: 0,
+          punchCount: 0, inspectionCount: 0, recentProjects: [], openRFIs: [],
+        });
+      }
     }
     load();
   }, []);

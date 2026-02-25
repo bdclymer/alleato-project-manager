@@ -341,7 +341,7 @@ export default function SystemDashboard() {
 
       {!status ? (
         <div className="flex justify-center py-20">
-          <div className="w-8 h-8 border-3 border-brand-orange border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <>

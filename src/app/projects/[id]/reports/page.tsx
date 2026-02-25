@@ -67,10 +67,10 @@ async function fetchScheduleStatus(projectId: string) {
   }
 
   const { count: openPunch } = await supabase
-    .from("drawing_pins")
+    .from("punch_list_items")
     .select("id", { count: "exact", head: true })
     .eq("project_id", projectId)
-    .eq("status", "open");
+    .in("status", ["open", "in_progress"]);
 
   return {
     status: project?.status || "Unknown",
@@ -84,18 +84,20 @@ async function fetchScheduleStatus(projectId: string) {
 
 async function fetchSafetyDashboard(projectId: string) {
   const [incidents, inspections, observations] = await Promise.all([
-    supabase.from("drawing_pins").select("id, status", { count: "exact" })
-      .eq("project_id", projectId).eq("pin_type", "inspection"),
-    supabase.from("rfis").select("id", { count: "exact", head: true })
+    supabase.from("incidents").select("id, status", { count: "exact" })
       .eq("project_id", projectId),
-    supabase.from("drawing_pins").select("id, status", { count: "exact" })
-      .eq("project_id", projectId).eq("pin_type", "observation"),
+    supabase.from("inspections").select("id, status", { count: "exact" })
+      .eq("project_id", projectId),
+    supabase.from("observations").select("id, status", { count: "exact" })
+      .eq("project_id", projectId),
   ]);
 
   return {
-    totalInspections: incidents.count || 0,
+    totalIncidents: incidents.count || 0,
+    totalInspections: inspections.count || 0,
     totalObservations: observations.count || 0,
-    openIssues: (incidents.data || []).filter((i) => i.status === "open").length +
+    openIssues: (incidents.data || []).filter((i) => i.status === "reported" || i.status === "investigating").length +
+      (inspections.data || []).filter((i) => i.status === "scheduled" || i.status === "in_progress").length +
       (observations.data || []).filter((o) => o.status === "open").length,
   };
 }
@@ -263,7 +265,11 @@ function ReportResult({ data, title }: { data: any; title: string }) {
     case "Safety Dashboard":
       return (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-brand-navy">{data.totalIncidents}</p>
+              <p className="text-[10px] text-gray-400">Incidents</p>
+            </div>
             <div className="bg-gray-50 rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-brand-navy">{data.totalInspections}</p>
               <p className="text-[10px] text-gray-400">Inspections</p>

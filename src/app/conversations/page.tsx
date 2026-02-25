@@ -1,7 +1,7 @@
 "use client";
 
 import { CrudPage } from "@/components/CrudPage";
-import { correspondenceModule } from "@/lib/modules";
+import { conversationsModule } from "@/lib/modules";
 
 export default function ConversationsPage() {
   return (
@@ -14,7 +14,7 @@ export default function ConversationsPage() {
         </p>
       </div>
       <CrudPage
-        config={{ ...correspondenceModule, projectScoped: false }}
+        config={{ ...conversationsModule, projectScoped: false }}
         showHeader={false}
       />
     </div>

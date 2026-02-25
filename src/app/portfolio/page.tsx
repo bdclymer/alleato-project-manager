@@ -35,28 +35,35 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     async function load() {
-      const [projects, rfis, submittals, punchItems, incidents] = await Promise.all([
-        supabase.from("projects").select("*").order("updated_at", { ascending: false }),
-        supabase.from("rfis").select("id", { count: "exact", head: true }).in("status", ["open", "Open"]),
-        supabase.from("submittals").select("id", { count: "exact", head: true }).in("status", ["open", "Open"]),
-        supabase.from("punch_list_items").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
-        supabase.from("incidents").select("id", { count: "exact", head: true }).in("status", ["reported", "investigating"]),
-      ]);
+      try {
+        const [projects, rfis, submittals, punchItems, incidents] = await Promise.all([
+          supabase.from("projects").select("*").order("updated_at", { ascending: false }),
+          supabase.from("rfis").select("id", { count: "exact", head: true }).in("status", ["open", "Open"]),
+          supabase.from("submittals").select("id", { count: "exact", head: true }).in("status", ["open", "Open"]),
+          supabase.from("punch_list_items").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
+          supabase.from("incidents").select("id", { count: "exact", head: true }).in("status", ["reported", "investigating"]),
+        ]);
 
-      const projectList = projects.data || [];
-      const activeCount = projectList.filter((p: any) => p.status === "Active" || p.status === "active").length;
-      const totalValue = projectList.reduce((sum: number, p: any) => sum + (p.contract_value || 0), 0);
+        const projectList = projects.data || [];
+        const activeCount = projectList.filter((p: any) => p.status === "Active" || p.status === "active").length;
+        const totalValue = projectList.reduce((sum: number, p: any) => sum + (p.contract_value || 0), 0);
 
-      setStats({
-        totalProjects: projectList.length,
-        activeProjects: activeCount,
-        totalValue,
-        openRFIs: rfis.count || 0,
-        openSubmittals: submittals.count || 0,
-        openPunchItems: punchItems.count || 0,
-        openIncidents: incidents.count || 0,
-        projects: projectList,
-      });
+        setStats({
+          totalProjects: projectList.length,
+          activeProjects: activeCount,
+          totalValue,
+          openRFIs: rfis.count || 0,
+          openSubmittals: submittals.count || 0,
+          openPunchItems: punchItems.count || 0,
+          openIncidents: incidents.count || 0,
+          projects: projectList,
+        });
+      } catch {
+        setStats({
+          totalProjects: 0, activeProjects: 0, totalValue: 0,
+          openRFIs: 0, openSubmittals: 0, openPunchItems: 0, openIncidents: 0, projects: [],
+        });
+      }
     }
     load();
   }, []);

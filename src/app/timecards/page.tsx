@@ -1,7 +1,7 @@
 "use client";
 
 import { CrudPage } from "@/components/CrudPage";
-import { timesheetsModule } from "@/lib/modules";
+import { timecardsModule } from "@/lib/modules";
 
 export default function TimecardsPage() {
   return (
@@ -14,7 +14,7 @@ export default function TimecardsPage() {
         </p>
       </div>
       <CrudPage
-        config={{ ...timesheetsModule, projectScoped: false, plural: "Timecards", singular: "Timecard" }}
+        config={{ ...timecardsModule, projectScoped: false }}
         showHeader={false}
       />
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { CrudPage } from "@/components/CrudPage";
-import { scheduleModule } from "@/lib/modules";
+import { companyScheduleModule } from "@/lib/modules";
 
 export default function CompanySchedulePage() {
   return (
@@ -14,7 +14,7 @@ export default function CompanySchedulePage() {
         </p>
       </div>
       <CrudPage
-        config={{ ...scheduleModule, projectScoped: false }}
+        config={{ ...companyScheduleModule, projectScoped: false }}
         showHeader={false}
       />
     </div>

@@ -68,7 +68,7 @@ export async function getMeetingMinutes(projectId?: string) {
 }
 
 export async function getAttachments(projectId?: string) {
-  let q = supabase.from("attachments").select("*, projects(name)").order("created_at", { ascending: false });
+  let q = supabase.from("documents").select("*, projects(name)").order("created_at", { ascending: false });
   if (projectId) q = q.eq("project_id", projectId);
   const { data, error } = await q;
   if (error) throw error;
@@ -83,7 +83,7 @@ export async function getProjectCounts(projectId: string) {
     supabase.from("commitment_change_orders").select("id", { count: "exact", head: true }).eq("project_id", projectId),
     supabase.from("contract_change_orders").select("id", { count: "exact", head: true }).eq("project_id", projectId),
     supabase.from("meeting_minutes").select("id", { count: "exact", head: true }).eq("project_id", projectId),
-    supabase.from("attachments").select("id", { count: "exact", head: true }).eq("project_id", projectId),
+    supabase.from("documents").select("id", { count: "exact", head: true }).eq("project_id", projectId),
   ]);
   return {
     rfis: rfis.count || 0,

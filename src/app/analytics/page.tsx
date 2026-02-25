@@ -9,34 +9,43 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function load() {
-      const [projects, rfis, submittals, incidents, punchItems, inspections, budgets] =
-        await Promise.all([
-          supabase.from("projects").select("*"),
-          supabase.from("rfis").select("status"),
-          supabase.from("submittals").select("status"),
-          supabase.from("incidents").select("severity, status"),
-          supabase.from("punch_list_items").select("status"),
-          supabase.from("inspections").select("result, status"),
-          supabase.from("budgets").select("original_amount, actual_amount"),
-        ]);
+      try {
+        const [projects, rfis, submittals, incidents, punchItems, inspections, budgets] =
+          await Promise.all([
+            supabase.from("projects").select("*"),
+            supabase.from("rfis").select("status"),
+            supabase.from("submittals").select("status"),
+            supabase.from("incidents").select("severity, status"),
+            supabase.from("punch_list_items").select("status"),
+            supabase.from("inspections").select("result, status"),
+            supabase.from("budgets").select("original_amount, actual_amount"),
+          ]);
 
-      const rfiData = rfis.data || [];
-      const submittalData = submittals.data || [];
-      const incidentData = incidents.data || [];
-      const punchData = punchItems.data || [];
-      const inspData = inspections.data || [];
-      const budgetData = budgets.data || [];
+        const rfiData = rfis.data || [];
+        const submittalData = submittals.data || [];
+        const incidentData = incidents.data || [];
+        const punchData = punchItems.data || [];
+        const inspData = inspections.data || [];
+        const budgetData = budgets.data || [];
 
-      setData({
-        projectCount: (projects.data || []).length,
-        totalValue: (projects.data || []).reduce((s: number, p: any) => s + (p.contract_value || 0), 0),
-        rfis: { total: rfiData.length, open: rfiData.filter((r: any) => r.status === "open" || r.status === "Open").length },
-        submittals: { total: submittalData.length, open: submittalData.filter((s: any) => s.status === "open" || s.status === "Open").length },
-        incidents: { total: incidentData.length, open: incidentData.filter((i: any) => i.status === "reported" || i.status === "investigating").length },
-        punchItems: { total: punchData.length, open: punchData.filter((p: any) => p.status === "open" || p.status === "in_progress").length },
-        inspections: { total: inspData.length, passed: inspData.filter((i: any) => i.result === "pass").length },
-        budget: { original: budgetData.reduce((s: number, b: any) => s + (b.original_amount || 0), 0), actual: budgetData.reduce((s: number, b: any) => s + (b.actual_amount || 0), 0) },
-      });
+        setData({
+          projectCount: (projects.data || []).length,
+          totalValue: (projects.data || []).reduce((s: number, p: any) => s + (p.contract_value || 0), 0),
+          rfis: { total: rfiData.length, open: rfiData.filter((r: any) => r.status === "open" || r.status === "Open").length },
+          submittals: { total: submittalData.length, open: submittalData.filter((s: any) => s.status === "open" || s.status === "Open").length },
+          incidents: { total: incidentData.length, open: incidentData.filter((i: any) => i.status === "reported" || i.status === "investigating").length },
+          punchItems: { total: punchData.length, open: punchData.filter((p: any) => p.status === "open" || p.status === "in_progress").length },
+          inspections: { total: inspData.length, passed: inspData.filter((i: any) => i.result === "pass").length },
+          budget: { original: budgetData.reduce((s: number, b: any) => s + (b.original_amount || 0), 0), actual: budgetData.reduce((s: number, b: any) => s + (b.actual_amount || 0), 0) },
+        });
+      } catch {
+        setData({
+          projectCount: 0, totalValue: 0,
+          rfis: { total: 0, open: 0 }, submittals: { total: 0, open: 0 },
+          incidents: { total: 0, open: 0 }, punchItems: { total: 0, open: 0 },
+          inspections: { total: 0, passed: 0 }, budget: { original: 0, actual: 0 },
+        });
+      }
     }
     load();
   }, []);

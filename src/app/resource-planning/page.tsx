@@ -1,7 +1,7 @@
 "use client";
 
 import { CrudPage } from "@/components/CrudPage";
-import { crewsModule } from "@/lib/modules";
+import { resourcePlanningModule } from "@/lib/modules";
 
 export default function ResourcePlanningPage() {
   return (
@@ -14,7 +14,7 @@ export default function ResourcePlanningPage() {
         </p>
       </div>
       <CrudPage
-        config={{ ...crewsModule, projectScoped: false, plural: "Resources" }}
+        config={{ ...resourcePlanningModule, projectScoped: false }}
         showHeader={false}
       />
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { CrudPage } from "@/components/CrudPage";
-import { companyDocumentsModule } from "@/lib/modules";
+import { planroomModule } from "@/lib/modules";
 
 export default function PlanroomPage() {
   return (
@@ -14,13 +14,7 @@ export default function PlanroomPage() {
         </p>
       </div>
       <CrudPage
-        config={{
-          ...companyDocumentsModule,
-          table: "company_documents",
-          singular: "Plan Document",
-          plural: "Plan Documents",
-          projectScoped: false,
-        }}
+        config={{ ...planroomModule, projectScoped: false }}
         showHeader={false}
       />
     </div>

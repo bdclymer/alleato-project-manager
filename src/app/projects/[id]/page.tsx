@@ -26,11 +26,15 @@ export default function ProjectDetailPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([getProject(id), getProjectCounts(id)]).then(([p, c]) => {
-      setProject(p);
-      setCounts(c);
-      setLoading(false);
-    });
+    Promise.all([getProject(id), getProjectCounts(id)])
+      .then(([p, c]) => {
+        setProject(p);
+        setCounts(c);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
   }, [id]);
 
   useEffect(() => {
@@ -39,7 +43,7 @@ export default function ProjectDetailPage() {
       ccos: () => getCommitmentCOs(id), ctcos: () => getContractCOs(id),
       meetings: () => getMeetingMinutes(id), attachments: () => getAttachments(id),
     };
-    loaders[tab]().then(setTabData);
+    loaders[tab]().then(setTabData).catch(() => setTabData([]));
   }, [id, tab]);
 
   const openEdit = () => {
