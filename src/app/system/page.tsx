@@ -13,13 +13,6 @@ interface AutomationJob {
   records?: number;
 }
 
-interface SyncEntry {
-  status: string;
-  completed_at: string;
-  duration_ms: number | null;
-  total_records: number;
-}
-
 interface TestEntry {
   status: string;
   completed_at: string;
@@ -50,7 +43,6 @@ interface SystemStatus {
   timestamp: string;
   uptime_percent: number;
   automation: {
-    sync: AutomationJob;
     test: AutomationJob;
     backup: AutomationJob & { tables: number; records: number };
     lighthouse: AutomationJob;
@@ -62,7 +54,6 @@ interface SystemStatus {
     table_counts: Record<string, number>;
   };
   performanceScores: Record<string, number>;
-  syncHistory: SyncEntry[];
   testHistory: TestEntry[];
   deployHistory: DeployEntry[];
   workflows: WorkflowRun[];
@@ -228,7 +219,7 @@ export default function SystemDashboard() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [storedPassword, setStoredPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "sync" | "tests" | "deploys">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "tests" | "deploys">("overview");
 
   const handleLogin = async () => {
     setAuthError("");
@@ -367,13 +358,13 @@ export default function SystemDashboard() {
             </div>
             <div className="bg-white rounded-xl border shadow-sm p-4">
               <div className="flex items-center gap-2 mb-2">
-                <StatusDot status={auto?.sync.status || "unknown"} />
-                <span className="text-xs text-gray-500 font-medium">Last Sync</span>
+                <StatusDot status={auto?.test?.status || "unknown"} />
+                <span className="text-xs text-gray-500 font-medium">Last Test</span>
               </div>
               <p className="text-lg font-bold text-brand-navy">
-                <TimeAgo date={auto?.sync.last_run || null} />
+                <TimeAgo date={auto?.test?.last_run || null} />
               </p>
-              <p className="text-[10px] text-gray-400">{auto?.sync.schedule}</p>
+              <p className="text-[10px] text-gray-400">{auto?.test?.schedule}</p>
             </div>
             <div className="bg-white rounded-xl border shadow-sm p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -388,7 +379,7 @@ export default function SystemDashboard() {
 
           {/* Tab Navigation */}
           <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1 w-fit">
-            {(["overview", "sync", "tests", "deploys"] as const).map((tab) => (
+            {(["overview", "tests", "deploys"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -412,7 +403,6 @@ export default function SystemDashboard() {
                   {auto &&
                     (
                       [
-                        ["Job Planner Sync", auto.sync, "sync"],
                         ["Playwright Tests", auto.test, "test"],
                         ["Database Backup", auto.backup, "backup"],
                         ["Lighthouse Audit", auto.lighthouse, "lighthouse"],
@@ -569,47 +559,6 @@ export default function SystemDashboard() {
                 )}
               </Card>
             </div>
-          )}
-
-          {activeTab === "sync" && (
-            <Card title="Sync History" icon="&#128260;">
-              {status.syncHistory.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-xs text-gray-500 border-b">
-                        <th className="text-left py-2">Status</th>
-                        <th className="text-left py-2">Time</th>
-                        <th className="text-right py-2">Records</th>
-                        <th className="text-right py-2">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {status.syncHistory.map((entry, i) => (
-                        <tr key={i} className="border-b last:border-0">
-                          <td className="py-2">
-                            <Badge status={entry.status} />
-                          </td>
-                          <td className="py-2 text-xs text-gray-600">
-                            {new Date(entry.completed_at).toLocaleString()}
-                          </td>
-                          <td className="py-2 text-right font-mono text-xs">
-                            {entry.total_records}
-                          </td>
-                          <td className="py-2 text-right text-xs text-gray-500">
-                            {formatDuration(entry.duration_ms)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-8">
-                  No sync history yet. The Job Planner sync runs every 15 minutes via GitHub Actions.
-                </p>
-              )}
-            </Card>
           )}
 
           {activeTab === "tests" && (

@@ -8,19 +8,6 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_REPO = process.env.GITHUB_REPO || "alleato-project-manager";
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME || "bdclymer";
 
-interface SystemLog {
-  id: number;
-  job_type: string;
-  status: string;
-  started_at: string;
-  completed_at: string | null;
-  duration_ms: number | null;
-  summary: Record<string, unknown>;
-  error_message: string | null;
-  run_id: string | null;
-  created_at: string;
-}
-
 interface WorkflowRun {
   id: number;
   name: string;
@@ -29,32 +16,24 @@ interface WorkflowRun {
   created_at: string;
   updated_at: string;
   html_url: string;
+  run_started_at?: string;
 }
 
-async function fetchSupabase(path: string): Promise<unknown> {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
+// Map workflow names to job types
+const WORKFLOW_MAP: Record<string, string> = {
+  "CI": "deploy",
+  "Deploy to Vercel": "deploy",
+  "Automated Testing": "test",
+  "Database Backup": "backup",
+  "Performance Monitor": "lighthouse",
+};
 
 async function fetchGitHubWorkflows(): Promise<WorkflowRun[]> {
   if (!GITHUB_TOKEN) return [];
 
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/actions/runs?per_page=20`,
+      `https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/actions/runs?per_page=30`,
       {
         headers: {
           Authorization: `Bearer ${GITHUB_TOKEN}`,
@@ -73,13 +52,18 @@ async function fetchGitHubWorkflows(): Promise<WorkflowRun[]> {
       created_at: r.created_at,
       updated_at: r.updated_at,
       html_url: r.html_url,
+      run_started_at: r.run_started_at,
     }));
   } catch {
     return [];
   }
 }
 
-async function getDbHealth(): Promise<{ status: string; latency_ms: number; table_counts: Record<string, number> }> {
+async function getDbHealth(): Promise<{
+  status: string;
+  latency_ms: number;
+  table_counts: Record<string, number>;
+}> {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     return { status: "unconfigured", latency_ms: 0, table_counts: {} };
   }
@@ -112,14 +96,27 @@ async function getDbHealth(): Promise<{ status: string; latency_ms: number; tabl
   }
 }
 
-function getLatestByType(logs: SystemLog[]): Record<string, SystemLog> {
-  const latest: Record<string, SystemLog> = {};
-  for (const log of logs) {
-    if (!latest[log.job_type] || new Date(log.created_at) > new Date(latest[log.job_type].created_at)) {
-      latest[log.job_type] = log;
+function getLatestRunByWorkflow(runs: WorkflowRun[]): Record<string, WorkflowRun> {
+  const latest: Record<string, WorkflowRun> = {};
+  for (const run of runs) {
+    const type = WORKFLOW_MAP[run.name];
+    if (!type) continue;
+    if (!latest[type] || new Date(run.created_at) > new Date(latest[type].created_at)) {
+      latest[type] = run;
     }
   }
   return latest;
+}
+
+function runToStatus(run: WorkflowRun | undefined): string {
+  if (!run) return "unknown";
+  if (run.status === "in_progress" || run.status === "queued") return "running";
+  return run.conclusion === "success" ? "success" : run.conclusion === "failure" ? "failure" : "unknown";
+}
+
+function getDuration(run: WorkflowRun): number | null {
+  if (!run.run_started_at || !run.updated_at) return null;
+  return new Date(run.updated_at).getTime() - new Date(run.run_started_at).getTime();
 }
 
 export async function GET(request: NextRequest) {
@@ -130,107 +127,86 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch all data in parallel
-  const [systemLogs, workflows, dbHealth] = await Promise.all([
-    fetchSupabase("system_logs?order=created_at.desc&limit=100") as Promise<SystemLog[] | null>,
+  // Fetch GitHub Actions + DB health in parallel
+  const [workflows, dbHealth] = await Promise.all([
     fetchGitHubWorkflows(),
     getDbHealth(),
   ]);
 
-  const logs = systemLogs || [];
-  const latestByType = getLatestByType(logs);
+  const latestByType = getLatestRunByWorkflow(workflows);
 
-  // Compute uptime from health checks
-  const healthLogs = logs.filter((l) => l.job_type === "health");
-  const recentHealth = healthLogs.slice(0, 24);
-  const healthyCount = recentHealth.filter((h) => h.status === "success").length;
-  const uptimePercent = recentHealth.length > 0 ? Math.round((healthyCount / recentHealth.length) * 100) : 100;
+  // Build automation status from GitHub Actions data
+  const automationFromGH = (type: string, schedule: string) => {
+    const run = latestByType[type];
+    return {
+      status: runToStatus(run),
+      last_run: run?.updated_at || null,
+      duration_ms: run ? getDuration(run) : null,
+      schedule,
+    };
+  };
 
-  // Sync history (last 10)
-  const syncHistory = logs
-    .filter((l) => l.job_type === "sync")
-    .slice(0, 10)
-    .map((l) => ({
-      status: l.status,
-      completed_at: l.completed_at || l.created_at,
-      duration_ms: l.duration_ms,
-      total_records: (l.summary as Record<string, unknown>)?.total_records || 0,
-    }));
+  // Build history from workflow runs
+  const historyFromGH = (workflowName: string) => {
+    return workflows
+      .filter((r) => r.name === workflowName && r.status === "completed")
+      .slice(0, 10)
+      .map((r) => ({
+        status: r.conclusion === "success" ? "success" : "failure",
+        completed_at: r.updated_at,
+        duration_ms: getDuration(r),
+        html_url: r.html_url,
+      }));
+  };
 
-  // Test history (last 10)
-  const testHistory = logs
-    .filter((l) => l.job_type === "test")
-    .slice(0, 10)
-    .map((l) => ({
-      status: l.status,
-      completed_at: l.completed_at || l.created_at,
-      duration_ms: l.duration_ms,
-      passed: (l.summary as Record<string, unknown>)?.passed || 0,
-      failed: (l.summary as Record<string, unknown>)?.failed || 0,
-      total: (l.summary as Record<string, unknown>)?.total || 0,
-    }));
-
-  // Performance scores from latest lighthouse run
-  const latestLighthouse = latestByType["lighthouse"];
-  const performanceScores = latestLighthouse?.summary || {};
-
-  // Deployment history
-  const deployHistory = logs
-    .filter((l) => l.job_type === "deploy")
-    .slice(0, 10)
-    .map((l) => ({
-      status: l.status,
-      completed_at: l.completed_at || l.created_at,
-      commit: (l.summary as Record<string, unknown>)?.commit || "",
-      deploy_url: (l.summary as Record<string, unknown>)?.deploy_url || "",
-      actor: (l.summary as Record<string, unknown>)?.actor || "",
-    }));
-
-  // Backup info
-  const latestBackup = latestByType["backup"];
+  // Health check runs
+  const allCompleted = workflows.filter((w) => w.status === "completed");
+  const recentRuns = allCompleted.slice(0, 20);
+  const successCount = recentRuns.filter((r) => r.conclusion === "success").length;
+  const uptimePercent = recentRuns.length > 0 ? Math.round((successCount / recentRuns.length) * 100) : 100;
 
   return NextResponse.json({
     timestamp: new Date().toISOString(),
     uptime_percent: uptimePercent,
 
     automation: {
-      sync: {
-        status: latestByType["sync"]?.status || "unknown",
-        last_run: latestByType["sync"]?.completed_at || latestByType["sync"]?.created_at || null,
-        duration_ms: latestByType["sync"]?.duration_ms || null,
-        schedule: "Every 15 minutes",
-      },
-      test: {
-        status: latestByType["test"]?.status || "unknown",
-        last_run: latestByType["test"]?.completed_at || latestByType["test"]?.created_at || null,
-        duration_ms: latestByType["test"]?.duration_ms || null,
-        schedule: "Every hour",
-      },
+      test: automationFromGH("test", "Every hour"),
       backup: {
-        status: latestByType["backup"]?.status || "unknown",
-        last_run: latestByType["backup"]?.completed_at || latestByType["backup"]?.created_at || null,
-        duration_ms: latestByType["backup"]?.duration_ms || null,
-        schedule: "Daily at midnight",
-        tables: (latestBackup?.summary as Record<string, unknown>)?.tables_backed_up || 0,
-        records: (latestBackup?.summary as Record<string, unknown>)?.total_records || 0,
+        ...automationFromGH("backup", "Daily at midnight"),
+        tables: 0,
+        records: 0,
       },
-      lighthouse: {
-        status: latestByType["lighthouse"]?.status || "unknown",
-        last_run: latestByType["lighthouse"]?.completed_at || latestByType["lighthouse"]?.created_at || null,
-        duration_ms: latestByType["lighthouse"]?.duration_ms || null,
-        schedule: "Every 6 hours",
-      },
+      lighthouse: automationFromGH("lighthouse", "Every 6 hours"),
       deploy: {
-        status: latestByType["deploy"]?.status || "unknown",
-        last_run: latestByType["deploy"]?.completed_at || latestByType["deploy"]?.created_at || null,
+        status: runToStatus(latestByType["deploy"]),
+        last_run: latestByType["deploy"]?.updated_at || null,
       },
     },
 
     database: dbHealth,
-    performanceScores,
-    syncHistory,
-    testHistory,
-    deployHistory,
-    workflows: workflows.slice(0, 10),
+    performanceScores: {},
+
+    syncHistory: [],
+    testHistory: historyFromGH("Automated Testing"),
+    deployHistory: workflows
+      .filter((r) => WORKFLOW_MAP[r.name] === "deploy" && r.status === "completed")
+      .slice(0, 10)
+      .map((r) => ({
+        status: r.conclusion === "success" ? "success" : "failure",
+        completed_at: r.updated_at,
+        commit: "",
+        deploy_url: "",
+        actor: "",
+        html_url: r.html_url,
+      })),
+
+    workflows: workflows.slice(0, 15).map((w) => ({
+      id: w.id,
+      name: w.name,
+      status: w.status,
+      conclusion: w.conclusion,
+      created_at: w.created_at,
+      html_url: w.html_url,
+    })),
   });
 }
