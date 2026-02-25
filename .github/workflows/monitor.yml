@@ -1,0 +1,135 @@
+name: Performance Monitor
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser || sudo apt-get install -y google-chrome-stable || true
+
+      - name: Run Lighthouse audits
+        id: lighthouse
+        env:
+          LIGHTHOUSE_URL: https://alleato-project-manager.vercel.app
+          CHROME_PATH: /usr/bin/chromium-browser
+        run: |
+          START_TIME=$(date +%s%3N)
+          mkdir -p test-reports/lighthouse logs
+
+          node scripts/lighthouse-audit.mjs 2>&1 | tee lighthouse-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          END_TIME=$(date +%s%3N)
+          DURATION=$((END_TIME - START_TIME))
+          echo "duration=${DURATION}" >> $GITHUB_OUTPUT
+          echo "exit_code=${EXIT_CODE}" >> $GITHUB_OUTPUT
+
+          # Extract scores from latest summary
+          LATEST_DIR=$(ls -1d test-reports/lighthouse/*/ 2>/dev/null | sort | tail -1 || true)
+          if [ -n "$LATEST_DIR" ] && [ -f "${LATEST_DIR}summary.json" ]; then
+            SCORES=$(node -e "
+              const s=JSON.parse(require('fs').readFileSync('${LATEST_DIR}summary.json','utf8'));
+              const avg = (cat) => {
+                const vals = s.results.filter(r=>r.scores).map(r=>r.scores[cat]||0);
+                return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
+              };
+              console.log(JSON.stringify({
+                performance: avg('performance'),
+                accessibility: avg('accessibility'),
+                bestPractices: avg('bestPractices'),
+                seo: avg('seo'),
+                pages_audited: s.results.length,
+                warnings: s.warnings
+              }));
+            " 2>/dev/null || echo '{}')
+            echo "scores=${SCORES}" >> $GITHUB_OUTPUT
+          else
+            echo 'scores={}' >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report-${{ github.run_id }}
+          path: test-reports/lighthouse/
+          retention-days: 14
+
+      - name: Log performance results
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          STATUS="${{ steps.lighthouse.outputs.exit_code == '0' && 'success' || 'failure' }}"
+          SCORES='${{ steps.lighthouse.outputs.scores || '{}' }}'
+          curl -s -X POST "${SUPABASE_URL}/rest/v1/system_logs" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{
+              \"job_type\": \"lighthouse\",
+              \"status\": \"${STATUS}\",
+              \"started_at\": \"$(date -Iseconds)\",
+              \"completed_at\": \"$(date -Iseconds)\",
+              \"duration_ms\": ${{ steps.lighthouse.outputs.duration || 0 }},
+              \"summary\": ${SCORES},
+              \"run_id\": \"${{ github.run_id }}\"
+            }" || true
+
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check application health
+        id: health
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://alleato-project-manager.vercel.app/api/system/health" || echo "000")
+          echo "http_code=${HTTP_CODE}" >> $GITHUB_OUTPUT
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log health check
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          curl -s -X POST "${SUPABASE_URL}/rest/v1/system_logs" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{
+              \"job_type\": \"health\",
+              \"status\": \"${{ steps.health.outputs.status }}\",
+              \"started_at\": \"$(date -Iseconds)\",
+              \"completed_at\": \"$(date -Iseconds)\",
+              \"summary\": {\"http_code\": ${{ steps.health.outputs.http_code || 0 }}},
+              \"run_id\": \"${{ github.run_id }}\"
+            }" || true

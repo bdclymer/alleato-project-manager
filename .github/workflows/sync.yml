@@ -1,0 +1,124 @@
+name: Job Planner Sync
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure system_logs table exists
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          node -e "
+          const pg = require('pg');
+          const host = process.env.SUPABASE_URL.replace('https://','').replace('.supabase.co','');
+          const client = new pg.Client({
+            connectionString: 'postgresql://postgres:' + process.env.SUPABASE_KEY + '@db.' + host + '.supabase.co:5432/postgres',
+            ssl: { rejectUnauthorized: false }
+          });
+          (async () => {
+            await client.connect();
+            await client.query(\`
+              CREATE TABLE IF NOT EXISTS system_logs (
+                id BIGSERIAL PRIMARY KEY,
+                job_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                completed_at TIMESTAMPTZ,
+                duration_ms INTEGER,
+                summary JSONB DEFAULT '{}',
+                error_message TEXT,
+                run_id TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+              )
+            \`);
+            await client.query('CREATE INDEX IF NOT EXISTS idx_system_logs_job_type ON system_logs(job_type, created_at DESC)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_system_logs_created ON system_logs(created_at DESC)');
+            await client.end();
+            console.log('system_logs table ready');
+          })().catch(e => { console.log('Table setup skipped:', e.message); process.exit(0); });
+          " || true
+
+      - name: Log sync start
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          curl -s -X POST "${SUPABASE_URL}/rest/v1/system_logs" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{
+              \"job_type\": \"sync\",
+              \"status\": \"running\",
+              \"started_at\": \"$(date -Iseconds)\",
+              \"run_id\": \"${{ github.run_id }}\"
+            }" || true
+
+      - name: Run Job Planner Sync
+        id: sync
+        env:
+          JOBPLANNER_API_KEY: ${{ secrets.JOBPLANNER_API_KEY }}
+          JOBPLANNER_API_V1: https://api.jobplanner.com
+          JOBPLANNER_API_V2: https://api-v2.jobplanner.com
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          START_TIME=$(date +%s%3N)
+          npm run sync 2>&1 | tee sync-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          END_TIME=$(date +%s%3N)
+          DURATION=$((END_TIME - START_TIME))
+          echo "duration=${DURATION}" >> $GITHUB_OUTPUT
+          echo "exit_code=${EXIT_CODE}" >> $GITHUB_OUTPUT
+
+          # Extract record counts from output
+          TOTAL=$(grep -oP 'Total:\s+\K\d+' sync-output.txt || echo "0")
+          echo "total_records=${TOTAL}" >> $GITHUB_OUTPUT
+
+      - name: Log sync result
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          STATUS="${{ steps.sync.outputs.exit_code == '0' && 'success' || 'failure' }}"
+          ERROR_MSG=""
+          if [ "${STATUS}" = "failure" ]; then
+            ERROR_MSG=$(tail -5 sync-output.txt 2>/dev/null | tr '"' "'" | tr '\n' ' ' || echo "Sync failed")
+          fi
+          curl -s -X POST "${SUPABASE_URL}/rest/v1/system_logs" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{
+              \"job_type\": \"sync\",
+              \"status\": \"${STATUS}\",
+              \"started_at\": \"$(date -Iseconds)\",
+              \"completed_at\": \"$(date -Iseconds)\",
+              \"duration_ms\": ${{ steps.sync.outputs.duration || 0 }},
+              \"summary\": {\"total_records\": ${{ steps.sync.outputs.total_records || 0 }}},
+              \"error_message\": $(echo \"${ERROR_MSG}\" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null || echo 'null'),
+              \"run_id\": \"${{ github.run_id }}\"
+            }" || true

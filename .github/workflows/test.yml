@@ -1,0 +1,101 @@
+name: Automated Testing
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        id: tests
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          START_TIME=$(date +%s%3N)
+          npx playwright test --reporter=json 2>&1 | tee test-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          END_TIME=$(date +%s%3N)
+          DURATION=$((END_TIME - START_TIME))
+          echo "duration=${DURATION}" >> $GITHUB_OUTPUT
+          echo "exit_code=${EXIT_CODE}" >> $GITHUB_OUTPUT
+
+          # Extract test counts from JSON report
+          if [ -f test-reports/results.json ]; then
+            PASSED=$(node -e "const r=JSON.parse(require('fs').readFileSync('test-reports/results.json','utf8')); console.log(r.stats?.expected||0)" 2>/dev/null || echo "0")
+            FAILED=$(node -e "const r=JSON.parse(require('fs').readFileSync('test-reports/results.json','utf8')); console.log(r.stats?.unexpected||0)" 2>/dev/null || echo "0")
+            TOTAL=$(node -e "const r=JSON.parse(require('fs').readFileSync('test-reports/results.json','utf8')); console.log((r.stats?.expected||0)+(r.stats?.unexpected||0)+(r.stats?.skipped||0))" 2>/dev/null || echo "0")
+          else
+            PASSED=0; FAILED=0; TOTAL=0
+          fi
+          echo "passed=${PASSED}" >> $GITHUB_OUTPUT
+          echo "failed=${FAILED}" >> $GITHUB_OUTPUT
+          echo "total=${TOTAL}" >> $GITHUB_OUTPUT
+
+      - name: Run self-healing tests
+        if: steps.tests.outputs.exit_code != '0'
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: npm run test:heal 2>&1 | tee heal-output.txt || true
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ github.run_id }}
+          path: |
+            test-reports/
+            playwright-report/
+          retention-days: 14
+
+      - name: Log test results
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          STATUS="${{ steps.tests.outputs.exit_code == '0' && 'success' || 'failure' }}"
+          curl -s -X POST "${SUPABASE_URL}/rest/v1/system_logs" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{
+              \"job_type\": \"test\",
+              \"status\": \"${STATUS}\",
+              \"started_at\": \"$(date -Iseconds)\",
+              \"completed_at\": \"$(date -Iseconds)\",
+              \"duration_ms\": ${{ steps.tests.outputs.duration || 0 }},
+              \"summary\": {
+                \"passed\": ${{ steps.tests.outputs.passed || 0 }},
+                \"failed\": ${{ steps.tests.outputs.failed || 0 }},
+                \"total\": ${{ steps.tests.outputs.total || 0 }},
+                \"self_healed\": ${{ steps.tests.outputs.exit_code != '0' && 'true' || 'false' }}
+              },
+              \"run_id\": \"${{ github.run_id }}\"
+            }" || true
