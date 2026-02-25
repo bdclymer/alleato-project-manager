@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS payments (
   payment_method TEXT DEFAULT 'check', -- check, ach, wire, credit_card
   reference_number TEXT,
   invoice_number TEXT,
-  commitment_id UUID REFERENCES commitments(id) ON DELETE SET NULL,
+  commitment_id UUID,
   lien_waiver_status TEXT DEFAULT 'not_required', -- not_required, pending, conditional, unconditional, received
   lien_waiver_type TEXT, -- conditional_progress, unconditional_progress, conditional_final, unconditional_final
   status TEXT DEFAULT 'pending', -- pending, approved, issued, cleared, void
@@ -247,7 +247,7 @@ CREATE TABLE IF NOT EXISTS tm_tickets (
   equipment_amount NUMERIC(15,2) DEFAULT 0,
   total_amount NUMERIC(15,2) DEFAULT 0,
   markup_percent NUMERIC(5,2) DEFAULT 0,
-  change_event_id UUID REFERENCES change_events(id) ON DELETE SET NULL,
+  change_event_id UUID,
   signature TEXT,
   photos JSONB DEFAULT '[]',
   notes TEXT,

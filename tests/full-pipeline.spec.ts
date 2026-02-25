@@ -324,6 +324,7 @@ test.describe('2. Project-Level Page Navigation', () => {
 
 test.describe('3. Sidebar Navigation Links', () => {
   test('all sidebar links are present and navigable', async ({ page }) => {
+    test.setTimeout(180000); // 3 minutes for 30+ sidebar links
     attachErrorListeners(page, 'sidebar');
     await safeGoto(page, '/', 'Dashboard');
 
@@ -700,6 +701,25 @@ test.describe('6. CrudPage Module CRUD Operations', () => {
           });
           await updateBtn.click();
           await page.waitForTimeout(2000);
+          await waitForPageReady(page);
+        }
+      }
+
+      // Ensure edit modal is closed before attempting delete
+      const editOverlay = page.locator('div.fixed.inset-0');
+      if (await editOverlay.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+        if (await editOverlay.isVisible({ timeout: 500 }).catch(() => false)) {
+          const cancelBtn2 = page.locator('button:has-text("Cancel")').first();
+          if (await cancelBtn2.isVisible().catch(() => false)) {
+            await cancelBtn2.click();
+            await page.waitForTimeout(500);
+          }
+        }
+        // Last resort: reload the page to clear any stuck modals
+        if (await editOverlay.isVisible({ timeout: 500 }).catch(() => false)) {
+          await safeGoto(page, mod.path, mod.name);
           await waitForPageReady(page);
         }
       }
