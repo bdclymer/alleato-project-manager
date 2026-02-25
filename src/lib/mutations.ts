@@ -1,15 +1,24 @@
 import { supabase } from "./supabase";
 
+/** Convert empty strings to null so Supabase doesn't choke on empty date/timestamp fields. */
+function sanitize(data: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(data)) {
+    out[k] = v === "" ? null : v;
+  }
+  return out;
+}
+
 // ── Projects ──
 export async function createProject(data: Record<string, any>) {
   const id = data.id || crypto.randomUUID();
-  const { error } = await supabase.from("projects").insert({ ...data, id, updated_at: new Date().toISOString() });
+  const { error } = await supabase.from("projects").insert(sanitize({ ...data, id, updated_at: new Date().toISOString() }));
   if (error) throw error;
   return id;
 }
 
 export async function updateProject(id: string, data: Record<string, any>) {
-  const { error } = await supabase.from("projects").update({ ...data, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("projects").update(sanitize({ ...data, updated_at: new Date().toISOString() })).eq("id", id);
   if (error) throw error;
 }
 
@@ -21,13 +30,13 @@ export async function deleteProject(id: string) {
 // ── RFIs ──
 export async function createRFI(data: Record<string, any>) {
   const id = data.id || crypto.randomUUID();
-  const { error } = await supabase.from("rfis").insert({ ...data, id });
+  const { error } = await supabase.from("rfis").insert(sanitize({ ...data, id }));
   if (error) throw error;
   return id;
 }
 
 export async function updateRFI(id: string, data: Record<string, any>) {
-  const { error } = await supabase.from("rfis").update({ ...data, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("rfis").update(sanitize({ ...data, updated_at: new Date().toISOString() })).eq("id", id);
   if (error) throw error;
 }
 
@@ -39,13 +48,13 @@ export async function deleteRFI(id: string) {
 // ── Submittals ──
 export async function createSubmittal(data: Record<string, any>) {
   const id = data.id || crypto.randomUUID();
-  const { error } = await supabase.from("submittals").insert({ ...data, id });
+  const { error } = await supabase.from("submittals").insert(sanitize({ ...data, id }));
   if (error) throw error;
   return id;
 }
 
 export async function updateSubmittal(id: string, data: Record<string, any>) {
-  const { error } = await supabase.from("submittals").update({ ...data, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("submittals").update(sanitize({ ...data, updated_at: new Date().toISOString() })).eq("id", id);
   if (error) throw error;
 }
 
@@ -58,14 +67,14 @@ export async function deleteSubmittal(id: string) {
 export async function createBudget(data: Record<string, any>) {
   const id = data.id || crypto.randomUUID();
   const variance = (data.revised_amount || data.original_amount || 0) - (data.actual_amount || 0);
-  const { error } = await supabase.from("budgets").insert({ ...data, id, variance });
+  const { error } = await supabase.from("budgets").insert(sanitize({ ...data, id, variance }));
   if (error) throw error;
   return id;
 }
 
 export async function updateBudget(id: string, data: Record<string, any>) {
   const variance = (data.revised_amount || data.original_amount || 0) - (data.actual_amount || 0);
-  const { error } = await supabase.from("budgets").update({ ...data, variance, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("budgets").update(sanitize({ ...data, variance, updated_at: new Date().toISOString() })).eq("id", id);
   if (error) throw error;
 }
 
@@ -77,13 +86,13 @@ export async function deleteBudget(id: string) {
 // ── Commitment Change Orders ──
 export async function createCommitmentCO(data: Record<string, any>) {
   const id = data.id || crypto.randomUUID();
-  const { error } = await supabase.from("commitment_change_orders").insert({ ...data, id });
+  const { error } = await supabase.from("commitment_change_orders").insert(sanitize({ ...data, id }));
   if (error) throw error;
   return id;
 }
 
 export async function updateCommitmentCO(id: string, data: Record<string, any>) {
-  const { error } = await supabase.from("commitment_change_orders").update({ ...data, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("commitment_change_orders").update(sanitize({ ...data, updated_at: new Date().toISOString() })).eq("id", id);
   if (error) throw error;
 }
 
@@ -95,13 +104,13 @@ export async function deleteCommitmentCO(id: string) {
 // ── Contract Change Orders ──
 export async function createContractCO(data: Record<string, any>) {
   const id = data.id || crypto.randomUUID();
-  const { error } = await supabase.from("contract_change_orders").insert({ ...data, id });
+  const { error } = await supabase.from("contract_change_orders").insert(sanitize({ ...data, id }));
   if (error) throw error;
   return id;
 }
 
 export async function updateContractCO(id: string, data: Record<string, any>) {
-  const { error } = await supabase.from("contract_change_orders").update({ ...data, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("contract_change_orders").update(sanitize({ ...data, updated_at: new Date().toISOString() })).eq("id", id);
   if (error) throw error;
 }
 
@@ -113,13 +122,13 @@ export async function deleteContractCO(id: string) {
 // ── Meeting Minutes ──
 export async function createMeeting(data: Record<string, any>) {
   const id = data.id || crypto.randomUUID();
-  const { error } = await supabase.from("meeting_minutes").insert({ ...data, id });
+  const { error } = await supabase.from("meeting_minutes").insert(sanitize({ ...data, id }));
   if (error) throw error;
   return id;
 }
 
 export async function updateMeeting(id: string, data: Record<string, any>) {
-  const { error } = await supabase.from("meeting_minutes").update({ ...data, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("meeting_minutes").update(sanitize({ ...data, updated_at: new Date().toISOString() })).eq("id", id);
   if (error) throw error;
 }
 

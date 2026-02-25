@@ -33,10 +33,12 @@ function mapProject(r) {
   };
 }
 
-function mapAttachment(r) {
+function mapAttachment(r, fallbackProjectId) {
+  const pid = r.projectId || fallbackProjectId;
+  if (!pid) return null; // skip if no project_id
   return {
-    id: r.guid || String(r.entryId || `att-${Date.now()}-${Math.random()}`),
-    project_id: String(r.projectId),
+    id: r.guid || String(r.entryId || `att-${pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+    project_id: String(pid),
     name: r.name,
     file_name: r.name,
     file_url: r.url || r.thumbUrl,
@@ -170,6 +172,15 @@ function meetingStatusLabel(code) {
   return map[code] || String(code);
 }
 
+function dedup(records) {
+  const seen = new Set();
+  return records.filter((r) => {
+    if (seen.has(r.id)) return false;
+    seen.add(r.id);
+    return true;
+  });
+}
+
 async function upsertBatch(table, records) {
   if (records.length === 0) {
     console.log(`  ${table}: 0 records (skipped).`);
@@ -219,7 +230,7 @@ export async function syncAll() {
 
   // Sub-resources in parallel
   await Promise.all([
-    upsertBatch("attachments", data.attachments.map(mapAttachment)),
+    upsertBatch("attachments", dedup(data.attachments.map((a) => mapAttachment(a, null)).filter(Boolean))),
     upsertBatch("rfis", data.rfis.map(mapRFI)),
     upsertBatch("submittals", data.submittals.map(mapSubmittal)),
     upsertBatch("budgets", data.budgets.map(mapBudget)),

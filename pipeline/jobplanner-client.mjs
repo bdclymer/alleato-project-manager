@@ -143,7 +143,12 @@ export async function fetchAllData() {
       ]);
 
     const extract = (r) => (r.status === "fulfilled" ? r.value : []);
-    allData.attachments.push(...extract(attachments));
+    // Tag attachments with projectId if missing
+    const attachmentList = extract(attachments);
+    for (const att of attachmentList) {
+      if (!att.projectId) att.projectId = pid;
+    }
+    allData.attachments.push(...attachmentList);
     allData.rfis.push(...extract(rfis));
     allData.submittals.push(...extract(submittals));
     allData.budgets.push(...extract(budgets));
