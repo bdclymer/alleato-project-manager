@@ -3,181 +3,176 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { getProject, getProjectCounts, getRFIs, getSubmittals, getBudgets, getCommitmentCOs, getContractCOs, getMeetingMinutes, getAttachments } from "@/lib/queries";
+import { updateProject, deleteProject } from "@/lib/mutations";
+import { PageHeader } from "@/components/PageHeader";
+import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DataTable } from "@/components/DataTable";
+import { Modal, FormField, inputClass, selectClass, btnPrimary, btnDanger, btnSecondary } from "@/components/Modal";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { PROJECT_MODULES } from "@/lib/modules";
-import { countRecords } from "@/lib/crud";
 
-interface ProjectData {
-  id: string;
-  name: string;
-  number?: string;
-  description?: string;
-  status?: string;
-  stage?: string;
-  project_type?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  start_date?: string;
-  end_date?: string;
-  project_manager?: string;
-  superintendent?: string;
-  contract_value?: number;
-  owner_name?: string;
-  architect_name?: string;
-}
+type Tab = "rfis" | "submittals" | "budgets" | "ccos" | "ctcos" | "meetings" | "attachments";
 
-export default function ProjectDashboard() {
+export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [project, setProject] = useState<ProjectData | null>(null);
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [project, setProject] = useState<any>(null);
+  const [counts, setCounts] = useState<any>(null);
+  const [tab, setTab] = useState<Tab>("rfis");
+  const [tabData, setTabData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      const { data } = await supabase.from("projects").select("*").eq("id", id).single();
-      setProject(data);
-
-      // Load counts for all modules
-      const moduleCounts: Record<string, number> = {};
-      await Promise.all(
-        PROJECT_MODULES.filter(m => m.config.table !== "project_directory").map(async (m) => {
-          try {
-            moduleCounts[m.key] = await countRecords(m.config.table, id);
-          } catch {
-            moduleCounts[m.key] = 0;
-          }
-        })
-      );
-      setCounts(moduleCounts);
+    Promise.all([getProject(id), getProjectCounts(id)]).then(([p, c]) => {
+      setProject(p);
+      setCounts(c);
       setLoading(false);
-    }
-    load();
+    });
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    const loaders: Record<Tab, () => Promise<any[]>> = {
+      rfis: () => getRFIs(id), submittals: () => getSubmittals(id), budgets: () => getBudgets(id),
+      ccos: () => getCommitmentCOs(id), ctcos: () => getContractCOs(id),
+      meetings: () => getMeetingMinutes(id), attachments: () => getAttachments(id),
+    };
+    loaders[tab]().then(setTabData);
+  }, [id, tab]);
 
+  const openEdit = () => {
+    setForm({
+      name: project.name || "", description: project.description || "", status: project.status || "",
+      address: project.address || "", city: project.city || "", state: project.state || "", zip: project.zip || "",
+      start_date: project.start_date?.substring(0, 10) || "", end_date: project.end_date?.substring(0, 10) || "",
+    });
+    setEditOpen(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateProject(id, form);
+      const p = await getProject(id);
+      setProject(p);
+      setEditOpen(false);
+    } catch (e: any) { alert("Error: " + e.message); }
+    setSaving(false);
+  };
+
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" /></div>;
   if (!project) return <div className="p-8">Project not found.</div>;
 
-  // Group modules by category for the dashboard
-  const categories = [
-    {
-      title: "Project Management",
-      modules: ["rfis", "submittals", "drawings", "specifications", "schedule"],
-    },
-    {
-      title: "Financial",
-      modules: ["budget", "prime-contracts", "commitments", "change-events", "commitment-cos", "contract-cos", "owner-invoices", "sub-invoices", "direct-costs"],
-    },
-    {
-      title: "Field",
-      modules: ["daily-logs", "punch-list", "meetings"],
-    },
-    {
-      title: "Quality & Safety",
-      modules: ["inspections", "observations", "incidents"],
-    },
-    {
-      title: "Documents & Communication",
-      modules: ["documents", "photos", "emails", "correspondence", "transmittals"],
-    },
-    {
-      title: "Other",
-      modules: ["timesheets", "action-plans", "warranties"],
-    },
+  const TABS: { key: Tab; label: string; count: number }[] = [
+    { key: "rfis", label: "RFIs", count: counts?.rfis || 0 },
+    { key: "submittals", label: "Submittals", count: counts?.submittals || 0 },
+    { key: "budgets", label: "Budgets", count: counts?.budgets || 0 },
+    { key: "ccos", label: "Commitment COs", count: counts?.commitmentCOs || 0 },
+    { key: "ctcos", label: "Contract COs", count: counts?.contractCOs || 0 },
+    { key: "meetings", label: "Meetings", count: counts?.meetings || 0 },
+    { key: "attachments", label: "Attachments", count: counts?.attachments || 0 },
   ];
 
   return (
     <div>
-      {/* Project Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-brand-navy">{project.name}</h1>
-        <div className="w-12 h-1 bg-brand-orange rounded mt-1" />
+      <Link href="/projects" className="text-sm text-brand-orange hover:underline mb-4 inline-block">&larr; All Projects</Link>
+      <div className="flex items-center justify-between">
+        <PageHeader title={project.name || "Project"} />
+        <button onClick={openEdit} className={btnPrimary}>Edit Project</button>
       </div>
 
-      {/* Project Info Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <span className="text-xs text-gray-400 block">Status</span>
-            <StatusBadge status={project.status} />
-          </div>
-          <div>
-            <span className="text-xs text-gray-400 block">Location</span>
-            <span>{[project.city, project.state].filter(Boolean).join(", ") || "—"}</span>
-          </div>
-          <div>
-            <span className="text-xs text-gray-400 block">Dates</span>
-            <span>{formatDate(project.start_date)} — {formatDate(project.end_date)}</span>
-          </div>
-          <div>
-            <span className="text-xs text-gray-400 block">Contract Value</span>
-            <span className="font-semibold">{formatCurrency(project.contract_value)}</span>
-          </div>
-          {project.project_manager && (
-            <div>
-              <span className="text-xs text-gray-400 block">Project Manager</span>
-              <span>{project.project_manager}</span>
-            </div>
-          )}
-          {project.superintendent && (
-            <div>
-              <span className="text-xs text-gray-400 block">Superintendent</span>
-              <span>{project.superintendent}</span>
-            </div>
-          )}
-          {project.owner_name && (
-            <div>
-              <span className="text-xs text-gray-400 block">Owner</span>
-              <span>{project.owner_name}</span>
-            </div>
-          )}
-          {project.architect_name && (
-            <div>
-              <span className="text-xs text-gray-400 block">Architect</span>
-              <span>{project.architect_name}</span>
-            </div>
-          )}
+        <div className="grid md:grid-cols-3 gap-4 text-sm">
+          <div><span className="text-gray-400">Status:</span> <StatusBadge status={project.status} /></div>
+          <div><span className="text-gray-400">Location:</span> {[project.address, project.city, project.state, project.zip].filter(Boolean).join(", ") || "\u2014"}</div>
+          <div><span className="text-gray-400">Start:</span> {formatDate(project.start_date)} \u2014 <span className="text-gray-400">End:</span> {formatDate(project.end_date)}</div>
         </div>
-        {project.description && (
-          <p className="mt-4 text-sm text-gray-500 border-t border-gray-50 pt-3">{project.description}</p>
-        )}
+        {project.description && <p className="mt-3 text-sm text-gray-500">{project.description}</p>}
       </div>
 
-      {/* Module Dashboard Grid */}
-      {categories.map((cat) => (
-        <div key={cat.title} className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">{cat.title}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {cat.modules.map((moduleKey) => {
-              const mod = PROJECT_MODULES.find((m) => m.key === moduleKey);
-              if (!mod) return null;
-              const count = counts[moduleKey] || 0;
-              return (
-                <Link
-                  key={moduleKey}
-                  href={`/projects/${id}/${mod.href}`}
-                  className="bg-white rounded-lg border border-gray-100 p-4 hover:border-brand-orange/30 hover:shadow-sm transition-all group"
-                >
-                  <div className="text-2xl font-bold text-brand-navy group-hover:text-brand-orange transition-colors">
-                    {count}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">{mod.config.plural}</div>
-                </Link>
-              );
-            })}
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)} className="text-left">
+            <StatCard label={t.label} value={t.count} />
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-1 mb-6 overflow-x-auto">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${tab === t.key ? "bg-brand-orange text-white" : "bg-white text-gray-500 hover:bg-gray-100"}`}
+          >{t.label} ({t.count})</button>
+        ))}
+      </div>
+
+      {tab === "rfis" && <DataTable data={tabData} searchField="subject" columns={[
+        { key: "number", header: "#" }, { key: "subject", header: "Subject" },
+        { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+        { key: "assigned_to", header: "Assigned To" }, { key: "due_date", header: "Due", render: (r) => formatDate(r.due_date) },
+      ]} />}
+      {tab === "submittals" && <DataTable data={tabData} searchField="title" columns={[
+        { key: "number", header: "#" }, { key: "title", header: "Title" },
+        { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+        { key: "assigned_to", header: "Assigned To" }, { key: "due_date", header: "Due", render: (r) => formatDate(r.due_date) },
+      ]} />}
+      {tab === "budgets" && <DataTable data={tabData} columns={[
+        { key: "code", header: "Code" }, { key: "description", header: "Description" },
+        { key: "original_amount", header: "Original", render: (r) => formatCurrency(r.original_amount) },
+        { key: "revised_amount", header: "Revised", render: (r) => formatCurrency(r.revised_amount) },
+        { key: "committed_amount", header: "Committed", render: (r) => formatCurrency(r.committed_amount) },
+        { key: "variance", header: "Variance", render: (r) => formatCurrency(r.variance) },
+      ]} />}
+      {tab === "ccos" && <DataTable data={tabData} searchField="title" columns={[
+        { key: "number", header: "#" }, { key: "title", header: "Title" }, { key: "vendor", header: "Vendor" },
+        { key: "amount", header: "Amount", render: (r) => formatCurrency(r.amount) },
+        { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+      ]} />}
+      {tab === "ctcos" && <DataTable data={tabData} searchField="title" columns={[
+        { key: "number", header: "#" }, { key: "title", header: "Title" },
+        { key: "amount", header: "Amount", render: (r) => formatCurrency(r.amount) },
+        { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+        { key: "approved_date", header: "Approved", render: (r) => formatDate(r.approved_date) },
+      ]} />}
+      {tab === "meetings" && <DataTable data={tabData} searchField="title" columns={[
+        { key: "number", header: "#" }, { key: "title", header: "Title" },
+        { key: "meeting_date", header: "Date", render: (r) => formatDate(r.meeting_date) },
+        { key: "location", header: "Location" },
+        { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+      ]} />}
+      {tab === "attachments" && <DataTable data={tabData} searchField="name" columns={[
+        { key: "name", header: "Name", render: (r) => r.file_url ? <a href={r.file_url} target="_blank" rel="noopener" className="text-brand-orange hover:underline">{r.name || r.file_name}</a> : (r.name || r.file_name || "\u2014") },
+        { key: "category", header: "Folder" },
+        { key: "file_size", header: "Size", render: (r) => r.file_size ? `${(r.file_size / 1024).toFixed(0)} KB` : "\u2014" },
+      ]} />}
+
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit Project">
+        <FormField label="Project Name"><input className={inputClass} value={form.name || ""} onChange={(e) => set("name", e.target.value)} /></FormField>
+        <FormField label="Status">
+          <select className={selectClass} value={form.status || ""} onChange={(e) => set("status", e.target.value)}>
+            <option>Active</option><option>READY</option><option>Completed</option><option>On Hold</option><option>Draft</option>
+          </select>
+        </FormField>
+        <FormField label="Description"><textarea className={inputClass} rows={3} value={form.description || ""} onChange={(e) => set("description", e.target.value)} /></FormField>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Address"><input className={inputClass} value={form.address || ""} onChange={(e) => set("address", e.target.value)} /></FormField>
+          <FormField label="City"><input className={inputClass} value={form.city || ""} onChange={(e) => set("city", e.target.value)} /></FormField>
+          <FormField label="State"><input className={inputClass} value={form.state || ""} onChange={(e) => set("state", e.target.value)} /></FormField>
+          <FormField label="ZIP"><input className={inputClass} value={form.zip || ""} onChange={(e) => set("zip", e.target.value)} /></FormField>
         </div>
-      ))}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Start Date"><input type="date" className={inputClass} value={form.start_date || ""} onChange={(e) => set("start_date", e.target.value)} /></FormField>
+          <FormField label="End Date"><input type="date" className={inputClass} value={form.end_date || ""} onChange={(e) => set("end_date", e.target.value)} /></FormField>
+        </div>
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+          <button onClick={() => setEditOpen(false)} className={btnSecondary}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} className={btnPrimary}>{saving ? "Saving..." : "Save Changes"}</button>
+        </div>
+      </Modal>
     </div>
   );
 }

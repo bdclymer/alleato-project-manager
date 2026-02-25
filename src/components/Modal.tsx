@@ -52,3 +52,27 @@ export function Modal({ open, onClose, title, children, wide }: ModalProps) {
     </div>
   );
 }
+
+export function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-600 mb-1">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+export const inputClass =
+  "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/40";
+
+export const selectClass =
+  "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-orange/40";
+
+export const btnPrimary =
+  "px-4 py-2 bg-brand-orange text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors";
+
+export const btnDanger =
+  "px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors";
+
+export const btnSecondary =
+  "px-4 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors";
