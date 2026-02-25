@@ -20,7 +20,6 @@ log() {
 # Define all cron jobs
 declare -A CRON_JOBS
 CRON_JOBS=(
-  ["sync"]="*/15 * * * * ${PROJECT_DIR}/scripts/sync-cron.sh ${CRON_TAG}"
   ["test"]="0 * * * * ${PROJECT_DIR}/scripts/test-heal-cron.sh ${CRON_TAG}"
   ["error"]="*/30 * * * * ${PROJECT_DIR}/scripts/error-monitor.sh ${CRON_TAG}"
   ["backup"]="0 0 * * * ${PROJECT_DIR}/scripts/backup-cron.sh ${CRON_TAG}"
@@ -62,7 +61,6 @@ ${entry}"
 
   log ""
   log "All cron jobs installed:"
-  log "  Sync:         Every 15 minutes"
   log "  Tests:        Every hour (:00)"
   log "  Error Monitor: Every 30 minutes"
   log "  Backup:       Daily at midnight"
