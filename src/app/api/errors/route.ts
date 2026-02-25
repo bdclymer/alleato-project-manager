@@ -22,13 +22,15 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("Failed to log error to Supabase:", error.message);
-      return NextResponse.json({ error: "Failed to log error" }, { status: 500 });
+      // Return success anyway - error logging should not block the client
+      return NextResponse.json({ success: true, logged: false });
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Error logging endpoint failed:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    // Return success anyway - error logging should not block the client
+    return NextResponse.json({ success: true, logged: false });
   }
 }
 
@@ -42,11 +44,12 @@ export async function GET() {
       .limit(100);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      // Table may not exist yet - return empty array gracefully
+      return NextResponse.json([]);
     }
 
     return NextResponse.json(data || []);
-  } catch (err) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch {
+    return NextResponse.json([]);
   }
 }
