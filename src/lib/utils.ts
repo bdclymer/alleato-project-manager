@@ -21,7 +21,7 @@ export function formatDate(date: string | null | undefined): string {
   }
 }
 
-export function statusColor(status: string | null): string {
+export function statusColor(status: string | null | undefined): string {
   if (!status) return "bg-gray-100 text-gray-700";
   const s = status.toLowerCase();
   if (["approved", "closed", "complete", "completed"].includes(s))
