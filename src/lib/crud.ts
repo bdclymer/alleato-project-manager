@@ -34,7 +34,12 @@ export async function listRecords(
   }
 
   const { data, error } = await q;
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes('not found') || error.message?.includes('does not exist') || error.code === '42P01') {
+      throw new Error(`Table "${table}" has not been set up yet. Please run the database migration.`);
+    }
+    throw error;
+  }
   return data || [];
 }
 

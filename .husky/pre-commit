@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+# Auto-generate documentation on commit
+node scripts/generate-docs.mjs 2>/dev/null || true

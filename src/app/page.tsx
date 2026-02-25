@@ -14,6 +14,9 @@ interface DashboardData {
   ccoCount: number;
   ctcoCount: number;
   meetingCount: number;
+  incidentCount: number;
+  punchCount: number;
+  inspectionCount: number;
   recentProjects: any[];
   openRFIs: any[];
 }
@@ -23,7 +26,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
-      const [projects, rfis, submittals, budgets, ccos, ctcos, meetings, recentProjects, openRFIs] =
+      const [projects, rfis, submittals, budgets, ccos, ctcos, meetings, incidents, punchItems, inspections, recentProjects, openRFIs] =
         await Promise.all([
           supabase.from("projects").select("id", { count: "exact", head: true }),
           supabase.from("rfis").select("id", { count: "exact", head: true }),
@@ -32,8 +35,11 @@ export default function Dashboard() {
           supabase.from("commitment_change_orders").select("id", { count: "exact", head: true }),
           supabase.from("contract_change_orders").select("id", { count: "exact", head: true }),
           supabase.from("meeting_minutes").select("id", { count: "exact", head: true }),
+          supabase.from("incidents").select("id", { count: "exact", head: true }).in("status", ["reported", "investigating"]),
+          supabase.from("punch_list_items").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
+          supabase.from("inspections").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
           supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(5),
-          supabase.from("rfis").select("*, projects(name)").eq("status", "Open").order("created_at", { ascending: false }).limit(5),
+          supabase.from("rfis").select("*, projects(name)").in("status", ["open", "Open"]).order("created_at", { ascending: false }).limit(5),
         ]);
 
       setData({
@@ -44,6 +50,9 @@ export default function Dashboard() {
         ccoCount: ccos.count || 0,
         ctcoCount: ctcos.count || 0,
         meetingCount: meetings.count || 0,
+        incidentCount: incidents.count || 0,
+        punchCount: punchItems.count || 0,
+        inspectionCount: inspections.count || 0,
         recentProjects: recentProjects.data || [],
         openRFIs: openRFIs.data || [],
       });
@@ -63,10 +72,12 @@ export default function Dashboard() {
     { label: "Projects", value: data.projectCount, href: "/projects" },
     { label: "RFIs", value: data.rfiCount, href: "/rfis" },
     { label: "Submittals", value: data.submittalCount, href: "/submittals" },
-    { label: "Budgets", value: data.budgetCount, href: "/budgets" },
-    { label: "Commitment COs", value: data.ccoCount, href: "/change-orders" },
-    { label: "Contract COs", value: data.ctcoCount, href: "/change-orders" },
+    { label: "Budget Lines", value: data.budgetCount, href: "/budgets" },
+    { label: "Change Orders", value: data.ccoCount + data.ctcoCount, href: "/change-orders" },
     { label: "Meetings", value: data.meetingCount, href: "/meeting-minutes" },
+    { label: "Open Incidents", value: data.incidentCount, href: "/incidents" },
+    { label: "Open Punch Items", value: data.punchCount, href: "/projects" },
+    { label: "Pending Inspections", value: data.inspectionCount, href: "/inspections" },
   ];
 
   return (
@@ -76,7 +87,7 @@ export default function Dashboard() {
         <div className="mt-2 h-1 w-16 bg-brand-orange rounded" />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         {stats.map((s) => (
           <Link key={s.label} href={s.href} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:border-brand-orange/30 transition-colors">
             <div className="text-2xl font-bold text-brand-navy">{s.value}</div>

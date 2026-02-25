@@ -8,3 +8,10 @@ dist/
 .DS_Store
 coverage/
 .vercel
+
+# Automation outputs
+logs/
+backups/
+test-reports/
+playwright-report/
+docs/README.md

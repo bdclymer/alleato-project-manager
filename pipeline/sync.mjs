@@ -181,14 +181,24 @@ function dedup(records) {
   });
 }
 
+// Track sync statistics for summary logging
+const syncStats = {
+  startTime: null,
+  tables: {},
+  totalRecords: 0,
+  errors: 0,
+};
+
 async function upsertBatch(table, records) {
   if (records.length === 0) {
     console.log(`  ${table}: 0 records (skipped).`);
+    syncStats.tables[table] = { synced: 0, errors: 0 };
     return 0;
   }
 
   const batchSize = 500;
   let total = 0;
+  let errors = 0;
 
   for (let i = 0; i < records.length; i += batchSize) {
     const batch = records.slice(i, i + batchSize);
@@ -207,16 +217,22 @@ async function upsertBatch(table, records) {
     if (!res.ok) {
       const err = await res.text();
       console.error(`  ERROR ${table}: ${err.substring(0, 300)}`);
+      errors++;
     } else {
       total += batch.length;
     }
   }
 
   console.log(`  ${table}: ${total} records synced.`);
+  syncStats.tables[table] = { synced: total, errors, total: records.length };
+  syncStats.totalRecords += total;
+  syncStats.errors += errors;
   return total;
 }
 
 export async function syncAll() {
+  syncStats.startTime = Date.now();
+
   console.log("╔════════════════════════════════════════════╗");
   console.log("║  Job Planner → Supabase Data Sync         ║");
   console.log("╚════════════════════════════════════════════╝\n");
@@ -238,6 +254,22 @@ export async function syncAll() {
     upsertBatch("contract_change_orders", data.contractChangeOrders.map(mapContractCO)),
     upsertBatch("meeting_minutes", data.meetingMinutes.map(mapMeeting)),
   ]);
+
+  // Print sync summary
+  const duration = ((Date.now() - syncStats.startTime) / 1000).toFixed(1);
+  console.log("\n╔════════════════════════════════════════════╗");
+  console.log("║  SYNC SUMMARY                             ║");
+  console.log("╠════════════════════════════════════════════╣");
+  for (const [table, stats] of Object.entries(syncStats.tables)) {
+    const pad = table.padEnd(30);
+    console.log(`║  ${pad} ${String(stats.synced).padStart(5)} records ║`);
+  }
+  console.log("╠════════════════════════════════════════════╣");
+  console.log(`║  Total: ${String(syncStats.totalRecords).padStart(5)} records in ${duration}s`.padEnd(44) + "║");
+  if (syncStats.errors > 0) {
+    console.log(`║  Errors: ${syncStats.errors}`.padEnd(44) + "║");
+  }
+  console.log("╚════════════════════════════════════════════╝");
 
   console.log("\nSync complete.");
 }

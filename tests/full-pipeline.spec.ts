@@ -117,37 +117,54 @@ async function safeGoto(page: Page, urlPath: string, pageName: string): Promise<
 // TEST SUITE 1: NAVIGATION & PAGE LOADING
 // ════════════════════════════════════════════════════════════════════════
 
-// All top-level (company) pages
+// All top-level (company) pages — full Procore parity
 const companyPages = [
   { path: '/', name: 'Dashboard' },
   { path: '/projects', name: 'Projects' },
+  { path: '/portfolio', name: 'Portfolio' },
+  { path: '/analytics', name: 'Analytics' },
   { path: '/rfis', name: 'RFIs' },
   { path: '/submittals', name: 'Submittals' },
   { path: '/budgets', name: 'Budgets' },
   { path: '/change-orders', name: 'Change Orders' },
   { path: '/meeting-minutes', name: 'Meeting Minutes' },
-  { path: '/directory', name: 'Directory' },
   { path: '/bids', name: 'Bids' },
   { path: '/prequalification', name: 'Prequalification' },
+  { path: '/planroom', name: 'Planroom' },
+  { path: '/cost-catalog', name: 'Cost Catalog' },
+  { path: '/directory', name: 'Directory' },
+  { path: '/company-documents', name: 'Company Documents' },
+  { path: '/conversations', name: 'Conversations' },
   { path: '/training', name: 'Training' },
   { path: '/reports', name: 'Reports' },
   { path: '/erp', name: 'ERP' },
-  { path: '/correspondence', name: 'Correspondence' },
+  { path: '/payments', name: 'Payments' },
+  { path: '/workflows', name: 'Workflows' },
+  { path: '/resource-planning', name: 'Resource Planning' },
+  { path: '/company-schedule', name: 'Company Schedule' },
+  { path: '/timecards', name: 'Timecards' },
   { path: '/timesheets', name: 'Timesheets' },
+  { path: '/correspondence', name: 'Correspondence' },
   { path: '/incidents', name: 'Incidents' },
   { path: '/inspections', name: 'Inspections' },
   { path: '/observations', name: 'Observations' },
   { path: '/action-plans', name: 'Action Plans' },
+  { path: '/admin', name: 'Admin' },
+  { path: '/permissions', name: 'Permissions' },
+  { path: '/system', name: 'System' },
 ];
 
-// Project sub-pages (will be appended to /projects/{id}/)
+// Project sub-pages — full Procore parity
 const projectSubPages = [
   { path: '', name: 'Project Overview' },
+  { path: '/tasks', name: 'Tasks' },
   { path: '/rfis', name: 'Project RFIs' },
   { path: '/submittals', name: 'Project Submittals' },
   { path: '/drawings', name: 'Project Drawings' },
   { path: '/specifications', name: 'Project Specifications' },
   { path: '/schedule', name: 'Project Schedule' },
+  { path: '/meetings', name: 'Project Meetings' },
+  { path: '/instructions', name: 'Instructions' },
   { path: '/budget', name: 'Project Budget' },
   { path: '/prime-contracts', name: 'Prime Contracts' },
   { path: '/commitments', name: 'Commitments' },
@@ -157,21 +174,35 @@ const projectSubPages = [
   { path: '/owner-invoices', name: 'Owner Invoices' },
   { path: '/sub-invoices', name: 'Sub Invoices' },
   { path: '/direct-costs', name: 'Direct Costs' },
+  { path: '/progress-billings', name: 'Progress Billings' },
+  { path: '/estimating', name: 'Estimating' },
+  { path: '/payments', name: 'Project Payments' },
+  { path: '/lien-waivers', name: 'Lien Waivers' },
+  { path: '/funding', name: 'Funding' },
   { path: '/daily-logs', name: 'Daily Logs' },
   { path: '/punch-list', name: 'Punch List' },
-  { path: '/meetings', name: 'Project Meetings' },
+  { path: '/tm-tickets', name: 'T&M Tickets' },
+  { path: '/forms', name: 'Forms' },
   { path: '/inspections', name: 'Project Inspections' },
   { path: '/observations', name: 'Project Observations' },
   { path: '/incidents', name: 'Project Incidents' },
+  { path: '/action-plans', name: 'Project Action Plans' },
+  { path: '/crews', name: 'Crews' },
+  { path: '/equipment', name: 'Equipment' },
+  { path: '/materials', name: 'Materials' },
+  { path: '/timesheets', name: 'Project Timesheets' },
   { path: '/documents', name: 'Documents' },
   { path: '/photos', name: 'Photos' },
   { path: '/emails', name: 'Emails' },
   { path: '/correspondence', name: 'Project Correspondence' },
   { path: '/transmittals', name: 'Transmittals' },
-  { path: '/timesheets', name: 'Project Timesheets' },
-  { path: '/action-plans', name: 'Project Action Plans' },
+  { path: '/models', name: 'Models (BIM)' },
+  { path: '/coordination-issues', name: 'Coordination Issues' },
+  { path: '/bidding', name: 'Bidding' },
+  { path: '/workflows', name: 'Workflows' },
   { path: '/warranties', name: 'Warranties' },
   { path: '/directory', name: 'Project Directory' },
+  { path: '/reports', name: 'Project Reports' },
 ];
 
 test.describe('1. Company-Level Page Navigation', () => {
@@ -521,16 +552,15 @@ test.describe('5. Projects CRUD', () => {
     await safeGoto(page, '/projects', 'Projects');
     await waitForPageReady(page);
 
-    // Handle the confirm dialog BEFORE clicking
-    page.on('dialog', async (dialog) => {
-      await dialog.accept();
-    });
-
     // Find the test project we created and delete it
     const deleteBtn = page.locator('button:has-text("Delete")').first();
     if (await deleteBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // Handle the confirm dialog BEFORE clicking - use once to avoid double-handle
+      page.once('dialog', async (dialog) => {
+        try { await dialog.accept(); } catch {}
+      });
       await deleteBtn.click();
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(3000).catch(() => {});
       await waitForPageReady(page);
       await screenshotPage(page, 'crud_projects_after_delete');
     } else {
@@ -561,6 +591,16 @@ const crudModules = [
   { path: '/action-plans', name: 'Action Plans', singular: 'Action Plan' },
   { path: '/training', name: 'Training', singular: 'Training' },
   { path: '/prequalification', name: 'Prequalification', singular: 'Prequalification' },
+  { path: '/planroom', name: 'Planroom', singular: 'Plan Package' },
+  { path: '/cost-catalog', name: 'Cost Catalog', singular: 'Cost Code' },
+  { path: '/company-documents', name: 'Company Documents', singular: 'Document' },
+  { path: '/payments', name: 'Payments', singular: 'Payment' },
+  { path: '/workflows', name: 'Workflows', singular: 'Workflow' },
+  { path: '/conversations', name: 'Conversations', singular: 'Conversation' },
+  { path: '/permissions', name: 'Permissions', singular: 'Permission Template' },
+  { path: '/resource-planning', name: 'Resource Planning', singular: 'Resource Assignment' },
+  { path: '/company-schedule', name: 'Company Schedule', singular: 'Schedule Item' },
+  { path: '/timecards', name: 'Timecards', singular: 'Timecard' },
 ];
 
 test.describe('6. CrudPage Module CRUD Operations', () => {
@@ -607,10 +647,10 @@ test.describe('6. CrudPage Module CRUD Operations', () => {
               severity: 'high',
               message: `Dialog on create: ${d.message()}`,
             });
-            await d.accept();
+            try { await d.accept(); } catch {}
           });
           await createBtn.click();
-          await page.waitForTimeout(2000);
+          await page.waitForTimeout(2000).catch(() => {});
           await waitForPageReady(page);
         }
 
@@ -656,7 +696,7 @@ test.describe('6. CrudPage Module CRUD Operations', () => {
               severity: 'high',
               message: `Dialog on update: ${d.message()}`,
             });
-            await d.accept();
+            try { await d.accept(); } catch {}
           });
           await updateBtn.click();
           await page.waitForTimeout(2000);

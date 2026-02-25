@@ -4,31 +4,49 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-// Company-level navigation
+// Company-level navigation — full Procore parity
 const COMPANY_NAV = [
   { section: "Portfolio" },
   { href: "/", label: "Dashboard", icon: "grid" },
+  { href: "/portfolio", label: "Portfolio", icon: "bar-chart" },
   { href: "/projects", label: "Projects", icon: "folder" },
+  { href: "/analytics", label: "Analytics", icon: "bar-chart" },
   { section: "Project Tools" },
   { href: "/rfis", label: "RFIs", icon: "help-circle" },
   { href: "/submittals", label: "Submittals", icon: "file-check" },
   { href: "/budgets", label: "Budgets", icon: "dollar-sign" },
   { href: "/change-orders", label: "Change Orders", icon: "refresh-cw" },
   { href: "/meeting-minutes", label: "Meeting Minutes", icon: "calendar" },
-  { section: "Company Tools" },
-  { href: "/directory", label: "Directory", icon: "users" },
+  { section: "Preconstruction" },
   { href: "/bids", label: "Bid Management", icon: "gavel" },
   { href: "/prequalification", label: "Prequalification", icon: "shield-check" },
+  { href: "/planroom", label: "Planroom", icon: "folder" },
+  { href: "/cost-catalog", label: "Cost Catalog", icon: "dollar-sign" },
+  { section: "Company Tools" },
+  { href: "/directory", label: "Directory", icon: "users" },
+  { href: "/company-documents", label: "Documents", icon: "folder" },
+  { href: "/conversations", label: "Conversations", icon: "mail" },
   { href: "/training", label: "Training", icon: "graduation-cap" },
   { href: "/reports", label: "Reports", icon: "bar-chart" },
   { href: "/erp", label: "ERP Integrations", icon: "link" },
-  { section: "Company Admin" },
-  { href: "/correspondence", label: "Correspondence", icon: "mail" },
+  { section: "Financial" },
+  { href: "/payments", label: "Payments", icon: "credit-card" },
+  { href: "/workflows", label: "Workflows", icon: "settings" },
+  { section: "Resource Management" },
+  { href: "/resource-planning", label: "Resource Planning", icon: "users" },
+  { href: "/company-schedule", label: "Schedule", icon: "gantt-chart" },
+  { href: "/timecards", label: "Timecards", icon: "clock" },
   { href: "/timesheets", label: "Timesheets", icon: "clock" },
+  { section: "Quality & Safety" },
+  { href: "/correspondence", label: "Correspondence", icon: "mail" },
   { href: "/incidents", label: "Incidents", icon: "alert-circle" },
   { href: "/inspections", label: "Inspections", icon: "clipboard-check" },
   { href: "/observations", label: "Observations", icon: "eye" },
   { href: "/action-plans", label: "Action Plans", icon: "target" },
+  { section: "Admin" },
+  { href: "/admin", label: "Admin", icon: "settings" },
+  { href: "/permissions", label: "Permissions", icon: "shield-check" },
+  { href: "/system", label: "System", icon: "settings" },
 ] as const;
 
 // SVG icon paths
@@ -94,7 +112,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-60 bg-brand-navy text-white flex flex-col z-40">
+    <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 bg-brand-navy text-white flex-col z-40">
       {/* Logo */}
       <div className="px-5 py-5 border-b border-brand-navy-light">
         <Link href="/" className="block">
