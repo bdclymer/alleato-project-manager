@@ -6,12 +6,8 @@ export const maxDuration = 30;
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-export async function POST(request: NextRequest) {
-  const authPassword = request.headers.get("x-system-password");
-  const expected = process.env.SYSTEM_DASHBOARD_PASSWORD;
-  if (expected && authPassword !== expected) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function POST(_request: NextRequest) {
+  // No auth required — idempotent CREATE TABLE IF NOT EXISTS
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     return NextResponse.json({ error: "Missing database credentials" }, { status: 500 });
