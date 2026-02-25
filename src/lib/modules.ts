@@ -306,7 +306,7 @@ export const scheduleModule: ModuleConfig = {
 export const budgetModule: ModuleConfig = {
   table: "budgets",
   singular: "Budget Line",
-  plural: "Budget",
+  plural: "Budgets",
   icon: "dollar-sign",
   searchField: "description",
   projectScoped: true,
@@ -650,7 +650,7 @@ export const punchListModule: ModuleConfig = {
 export const meetingsModule: ModuleConfig = {
   table: "meeting_minutes",
   singular: "Meeting",
-  plural: "Meetings",
+  plural: "Meeting Minutes",
   icon: "calendar",
   searchField: "title",
   projectScoped: true,
