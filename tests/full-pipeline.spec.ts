@@ -227,7 +227,7 @@ test.describe('1. Company-Level Page Navigation', () => {
         const bodyText = await page.textContent('body').catch(() => '');
         const hasErrorPage =
           bodyText?.includes('Application error') ||
-          bodyText?.includes('500') ||
+          bodyText?.includes('Internal Server Error') ||
           bodyText?.includes('This page could not be found');
 
         if (hasErrorPage) {

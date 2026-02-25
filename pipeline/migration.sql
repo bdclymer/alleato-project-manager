@@ -1138,6 +1138,115 @@ CREATE TABLE IF NOT EXISTS project_workflows (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Drawing Revisions (version history)
+CREATE TABLE IF NOT EXISTS drawing_revisions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  drawing_id UUID REFERENCES drawings(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  revision_number TEXT NOT NULL,
+  revision_date TIMESTAMPTZ DEFAULT NOW(),
+  description TEXT,
+  file_url TEXT,
+  file_name TEXT,
+  file_size BIGINT,
+  storage_path TEXT,
+  uploaded_by TEXT,
+  status TEXT DEFAULT 'current',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Drawing Markups (annotations)
+CREATE TABLE IF NOT EXISTS drawing_markups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  drawing_id UUID REFERENCES drawings(id) ON DELETE CASCADE,
+  revision_id UUID REFERENCES drawing_revisions(id) ON DELETE SET NULL,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  markup_type TEXT NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}',
+  color TEXT DEFAULT '#FF0000',
+  layer TEXT DEFAULT 'default',
+  created_by TEXT,
+  created_by_color TEXT,
+  visible BOOLEAN DEFAULT true,
+  locked BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Drawing Pins (location-linked items)
+CREATE TABLE IF NOT EXISTS drawing_pins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  drawing_id UUID REFERENCES drawings(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  pin_type TEXT NOT NULL,
+  linked_id TEXT,
+  linked_table TEXT,
+  x_percent NUMERIC(7,4) NOT NULL,
+  y_percent NUMERIC(7,4) NOT NULL,
+  label TEXT,
+  status TEXT,
+  color TEXT,
+  notes TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Drawing Transmittals
+CREATE TABLE IF NOT EXISTS drawing_transmittals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  transmittal_number TEXT NOT NULL,
+  subject TEXT,
+  to_company TEXT,
+  to_contact TEXT,
+  to_email TEXT,
+  from_company TEXT,
+  from_contact TEXT,
+  from_email TEXT,
+  sent_date TIMESTAMPTZ,
+  due_date TIMESTAMPTZ,
+  purpose TEXT DEFAULT 'for_review',
+  status TEXT DEFAULT 'draft',
+  cover_notes TEXT,
+  signature_required BOOLEAN DEFAULT false,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Drawing Transmittal Items
+CREATE TABLE IF NOT EXISTS drawing_transmittal_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transmittal_id UUID REFERENCES drawing_transmittals(id) ON DELETE CASCADE,
+  drawing_id UUID REFERENCES drawings(id) ON DELETE SET NULL,
+  revision_id UUID REFERENCES drawing_revisions(id) ON DELETE SET NULL,
+  drawing_number TEXT,
+  title TEXT,
+  revision TEXT,
+  copies INTEGER DEFAULT 1,
+  format TEXT DEFAULT 'pdf',
+  acknowledged BOOLEAN DEFAULT false,
+  acknowledged_date TIMESTAMPTZ,
+  acknowledged_by TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Drawing Markup Layers
+CREATE TABLE IF NOT EXISTS drawing_markup_layers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  drawing_id UUID REFERENCES drawings(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT DEFAULT '#FF0000',
+  visible BOOLEAN DEFAULT true,
+  locked BOOLEAN DEFAULT false,
+  sort_order INTEGER DEFAULT 0,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============================================================
 -- Indexes for new tables
 -- ============================================================
@@ -1157,6 +1266,12 @@ CREATE INDEX IF NOT EXISTS idx_coordination_issues_project ON coordination_issue
 CREATE INDEX IF NOT EXISTS idx_project_bidding_project ON project_bidding(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_workflows_project ON project_workflows(project_id);
 CREATE INDEX IF NOT EXISTS idx_drawings_project ON drawings(project_id);
+CREATE INDEX IF NOT EXISTS idx_drawing_revisions_drawing ON drawing_revisions(drawing_id);
+CREATE INDEX IF NOT EXISTS idx_drawing_markups_drawing ON drawing_markups(drawing_id);
+CREATE INDEX IF NOT EXISTS idx_drawing_pins_drawing ON drawing_pins(drawing_id);
+CREATE INDEX IF NOT EXISTS idx_drawing_transmittals_project ON drawing_transmittals(project_id);
+CREATE INDEX IF NOT EXISTS idx_drawing_transmittal_items_transmittal ON drawing_transmittal_items(transmittal_id);
+CREATE INDEX IF NOT EXISTS idx_markup_layers_drawing ON drawing_markup_layers(drawing_id);
 CREATE INDEX IF NOT EXISTS idx_specifications_project ON specifications(project_id);
 CREATE INDEX IF NOT EXISTS idx_schedule_tasks_project ON schedule_tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_prime_contracts_project ON prime_contracts(project_id);
@@ -1190,7 +1305,9 @@ BEGIN
     'transmittals','warranties','project_directory','tasks','forms',
     'equipment','materials','crews','funding','tm_tickets',
     'instructions','progress_billings','estimates','lien_waivers',
-    'bim_models','coordination_issues','project_bidding','project_workflows'
+    'bim_models','coordination_issues','project_bidding','project_workflows',
+    'drawing_revisions','drawing_markups','drawing_pins','drawing_transmittals',
+    'drawing_transmittal_items','drawing_markup_layers'
   ]) LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', tbl);
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'allow_all' AND tablename = tbl) THEN
