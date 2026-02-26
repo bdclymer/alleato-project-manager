@@ -1,23 +1,24 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
-import { ErrorBoundary, GlobalErrorHandlers } from "@/components/ErrorBoundary";
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "Alleato Project Manager",
-  description: "Construction project management by Alleato Group",
+  title: 'Alleato Project Manager',
+  description: 'AI-powered project management system for The Alleato Group',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
-      <body className="flex min-h-screen">
-        <Sidebar />
-        <main className="flex-1 ml-0 md:ml-60 p-4 md:p-8 overflow-x-hidden">
-          <ErrorBoundary>
-            {children}
-          </ErrorBoundary>
-          <GlobalErrorHandlers />
+      <body className={inter.className}>
+        <main className="min-h-screen">
+          {children}
         </main>
       </body>
     </html>
