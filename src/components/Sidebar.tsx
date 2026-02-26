@@ -29,6 +29,7 @@ const COMPANY_NAV = [
   { href: "/training", label: "Training", icon: "graduation-cap" },
   { href: "/reports", label: "Reports", icon: "bar-chart" },
   { href: "/erp", label: "ERP Integrations", icon: "link" },
+  { href: "/agents", label: "AI Agents", icon: "cpu" },
   { section: "Financial" },
   { href: "/payments", label: "Payments", icon: "credit-card" },
   { href: "/workflows", label: "Workflows", icon: "settings" },
@@ -89,6 +90,7 @@ const ICONS: Record<string, string> = {
   settings: "M12 15a3 3 0 100-6 3 3 0 000 6z",
   chevronDown: "M6 9l6 6 6-6",
   chevronRight: "M9 18l6-6-6-6",
+  cpu: "M9 3H5a2 2 0 00-2 2v4m6-6h6m-6 0V1m6 2h4a2 2 0 012 2v4m-6-6V1m6 8v6m0-6h2m-2 6v4a2 2 0 01-2 2h-4m6-6h2m-8 6H9m6 0v2m-6-2v2m-6-8v-6m0 6H1m2-6a2 2 0 012-2m-4 8H1",
   home: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
 };
 
