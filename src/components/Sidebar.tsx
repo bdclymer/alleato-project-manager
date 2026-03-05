@@ -110,7 +110,7 @@ function NavIcon({ name }: { name: string }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ userEmail }: { userEmail?: string }) {
   const pathname = usePathname();
 
   return (
