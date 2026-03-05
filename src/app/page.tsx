@@ -4,139 +4,254 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatDate } from "@/lib/utils";
+import { Modal } from "@/components/Modal";
+import { createProject } from "@/lib/mutations";
 
-interface DashboardData {
-  projectCount: number;
-  rfiCount: number;
-  submittalCount: number;
-  budgetCount: number;
-  ccoCount: number;
-  ctcoCount: number;
-  meetingCount: number;
-  incidentCount: number;
-  punchCount: number;
-  inspectionCount: number;
-  recentProjects: any[];
-  openRFIs: any[];
-}
+const PROJECT_TYPES = ["Commercial", "Industrial", "Infrastructure", "Residential", "Healthcare", "Education", "Other"];
+const PROJECT_STAGES = ["Preconstruction", "Bidding", "Course of Construction", "Substantial Completion", "Closeout", "Warranty", "Completed"];
+const STATUS_FILTERS = ["Active", "All", "Completed", "On Hold", "Draft"];
 
-export default function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
+const emptyForm = {
+  name: "", number: "", address: "", city: "", state: "", zip: "",
+  project_type: "Commercial", stage: "Course of Construction",
+  status: "Active", project_manager: "", superintendent: "",
+  contract_value: "", start_date: "", end_date: "",
+};
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [projects, rfis, submittals, budgets, ccos, ctcos, meetings, incidents, punchItems, inspections, recentProjects, openRFIs] =
-          await Promise.all([
-            supabase.from("projects").select("id", { count: "exact", head: true }),
-            supabase.from("rfis").select("id", { count: "exact", head: true }),
-            supabase.from("submittals").select("id", { count: "exact", head: true }),
-            supabase.from("budgets").select("id", { count: "exact", head: true }),
-            supabase.from("commitment_change_orders").select("id", { count: "exact", head: true }),
-            supabase.from("contract_change_orders").select("id", { count: "exact", head: true }),
-            supabase.from("meeting_minutes").select("id", { count: "exact", head: true }),
-            supabase.from("incidents").select("id", { count: "exact", head: true }).in("status", ["reported", "investigating"]),
-            supabase.from("punch_list_items").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
-            supabase.from("inspections").select("id", { count: "exact", head: true }).in("status", ["scheduled", "in_progress"]),
-            supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(5),
-            supabase.from("rfis").select("*, projects(name)").in("status", ["open", "Open"]).order("created_at", { ascending: false }).limit(5),
-          ]);
+export default function HomePage() {
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Active");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
-        setData({
-          projectCount: projects.count || 0,
-          rfiCount: rfis.count || 0,
-          submittalCount: submittals.count || 0,
-          budgetCount: budgets.count || 0,
-          ccoCount: ccos.count || 0,
-          ctcoCount: ctcos.count || 0,
-          meetingCount: meetings.count || 0,
-          incidentCount: incidents.count || 0,
-          punchCount: punchItems.count || 0,
-          inspectionCount: inspections.count || 0,
-          recentProjects: recentProjects.data || [],
-          openRFIs: openRFIs.data || [],
-        });
-      } catch {
-        setData({
-          projectCount: 0, rfiCount: 0, submittalCount: 0, budgetCount: 0,
-          ccoCount: 0, ctcoCount: 0, meetingCount: 0, incidentCount: 0,
-          punchCount: 0, inspectionCount: 0, recentProjects: [], openRFIs: [],
-        });
-      }
-    }
-    load();
-  }, []);
+  const load = async () => {
+    const { data } = await supabase.from("projects").select("*").order("updated_at", { ascending: false });
+    setProjects(data || []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
 
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const stats = [
-    { label: "Projects", value: data.projectCount, href: "/projects" },
-    { label: "RFIs", value: data.rfiCount, href: "/rfis" },
-    { label: "Submittals", value: data.submittalCount, href: "/submittals" },
-    { label: "Budget Lines", value: data.budgetCount, href: "/budgets" },
-    { label: "Change Orders", value: data.ccoCount + data.ctcoCount, href: "/change-orders" },
-    { label: "Meetings", value: data.meetingCount, href: "/meeting-minutes" },
-    { label: "Open Incidents", value: data.incidentCount, href: "/incidents" },
-    { label: "Open Punch Items", value: data.punchCount, href: "/projects" },
-    { label: "Pending Inspections", value: data.inspectionCount, href: "/inspections" },
-  ];
+  const handleCreate = async () => {
+    setSaving(true);
+    try {
+      await createProject({
+        ...form,
+        contract_value: form.contract_value ? parseFloat(form.contract_value) : null,
+      });
+      setModalOpen(false);
+      setForm(emptyForm);
+      await load();
+    } catch (e: any) { alert(e.message); }
+    setSaving(false);
+  };
+
+  const filtered = projects.filter((p) => {
+    const matchesStatus = statusFilter === "All" || (p.status || "Active") === statusFilter;
+    const matchesSearch = !search ||
+      (p.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.number || "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.city || "").toLowerCase().includes(search.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-brand-navy">Dashboard</h1>
-        <div className="mt-2 h-1 w-16 bg-brand-orange rounded" />
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-navy">Home</h1>
+          <div className="w-12 h-1 bg-brand-orange rounded mt-1" />
+        </div>
+        <button
+          onClick={() => { setForm(emptyForm); setModalOpen(true); }}
+          className="flex items-center gap-2 px-4 py-2 bg-brand-orange text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition-colors"
+        >
+          + Create Project
+        </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-        {stats.map((s) => (
-          <Link key={s.label} href={s.href} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:border-brand-orange/30 transition-colors">
-            <div className="text-2xl font-bold text-brand-navy">{s.value}</div>
-            <div className="text-xs text-gray-400 mt-1">{s.label}</div>
-          </Link>
-        ))}
+      {/* Tab */}
+      <div className="flex border-b border-gray-200 mb-5">
+        <span className="px-4 py-2 text-sm font-semibold text-brand-orange border-b-2 border-brand-orange">Portfolio</span>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-lg font-semibold text-brand-navy mb-4">Recent Projects</h2>
-          <div className="space-y-3">
-            {data.recentProjects.map((p: any) => (
-              <Link key={p.id} href={`/projects/${p.id}`} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                <div>
-                  <p className="font-medium text-sm">{p.name}</p>
-                  <p className="text-xs text-gray-400">{[p.city, p.state].filter(Boolean).join(", ")}</p>
-                </div>
-                <StatusBadge status={p.status} />
-              </Link>
-            ))}
-            {data.recentProjects.length === 0 && <p className="text-sm text-gray-400">No projects yet.</p>}
+      {/* Projects List header */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-brand-navy">Projects List</h2>
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="relative">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg w-48 focus:outline-none focus:border-brand-orange"
+                placeholder="Search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            {/* Status filter */}
+            <div className="relative">
+              <select
+                className="pl-3 pr-7 py-1.5 text-sm border border-gray-200 rounded-lg appearance-none focus:outline-none focus:border-brand-orange"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                {STATUS_FILTERS.map((s) => <option key={s}>{s}</option>)}
+              </select>
+              <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-lg font-semibold text-brand-navy mb-4">Open RFIs</h2>
-          <div className="space-y-3">
-            {data.openRFIs.map((r: any) => (
-              <div key={r.id} className="p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-sm">#{r.number} &mdash; {r.subject}</p>
-                  <StatusBadge status={r.status} />
-                </div>
-                <p className="text-xs text-gray-400 mt-1">{(r as any).projects?.name} &middot; Due {formatDate(r.due_date)}</p>
-              </div>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50/50">
+              {["Project Name", "Number", "Address", "Stage", "Project Type", "Status", "Actions"].map((h) => (
+                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">
+                  {projects.length === 0 ? "No projects yet. Create your first project." : "No projects match your search."}
+                </td>
+              </tr>
+            ) : filtered.map((p) => (
+              <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-sm">
+                  <Link href={`/projects/${p.id}`} className="text-brand-orange hover:underline font-medium">
+                    {p.name || "Untitled"}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-500 font-mono">{p.number || "—"}</td>
+                <td className="px-4 py-3 text-sm text-gray-500">
+                  {[p.address, p.city, p.state].filter(Boolean).join(", ") || "—"}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {p.stage ? (
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">{p.stage}</span>
+                  ) : "—"}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-500">{p.project_type || "—"}</td>
+                <td className="px-4 py-3"><StatusBadge status={p.status || "Active"} /></td>
+                <td className="px-4 py-3">
+                  <Link href={`/projects/${p.id}`} className="text-xs text-brand-orange hover:underline font-medium">
+                    Open
+                  </Link>
+                </td>
+              </tr>
             ))}
-            {data.openRFIs.length === 0 && <p className="text-sm text-gray-400">No open RFIs.</p>}
+          </tbody>
+        </table>
+
+        {filtered.length > 0 && (
+          <div className="px-5 py-3 border-t border-gray-100 text-xs text-gray-400">
+            Showing {filtered.length} of {projects.length} projects
+          </div>
+        )}
+      </div>
+
+      {/* Create Project Modal */}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Create Project" wide>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Project Name *</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.name} onChange={(e) => set("name", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Project Number</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="e.g. 24-101" value={form.number} onChange={(e) => set("number", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Project Type</label>
+              <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.project_type} onChange={(e) => set("project_type", e.target.value)}>
+                {PROJECT_TYPES.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Stage</label>
+              <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.stage} onChange={(e) => set("stage", e.target.value)}>
+                {PROJECT_STAGES.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Address</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.address} onChange={(e) => set("address", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">City</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.city} onChange={(e) => set("city", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">State</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="e.g. TN" value={form.state} onChange={(e) => set("state", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">ZIP</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.zip} onChange={(e) => set("zip", e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Project Manager</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.project_manager} onChange={(e) => set("project_manager", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Superintendent</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.superintendent} onChange={(e) => set("superintendent", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Contract Value ($)</label>
+              <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.contract_value} onChange={(e) => set("contract_value", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Status</label>
+              <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.status} onChange={(e) => set("status", e.target.value)}>
+                <option>Active</option><option>Draft</option><option>On Hold</option><option>Completed</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Start Date</label>
+              <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">End Date</label>
+              <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value={form.end_date} onChange={(e) => set("end_date", e.target.value)} />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-500">Cancel</button>
+            <button onClick={handleCreate} disabled={saving || !form.name} className="px-6 py-2 bg-brand-orange text-white text-sm font-semibold rounded-lg disabled:opacity-60">
+              {saving ? "Creating..." : "Create Project"}
+            </button>
           </div>
         </div>
-      </div>
+      </Modal>
     </div>
   );
 }
