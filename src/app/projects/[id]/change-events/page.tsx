@@ -19,6 +19,7 @@ const emptyForm = {
 export default function ChangeEventsPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const [changeOrders, setChangeOrders] = useState<any[]>([]);
+  const [commitments, setCommitments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -26,11 +27,56 @@ export default function ChangeEventsPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("All");
+  const [promoting, setPromoting] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase.from("change_events").select("*").eq("project_id", projectId).order("number", { ascending: true });
-    setChangeOrders(data || []);
+    const [ce, c] = await Promise.all([
+      supabase.from("change_events").select("*").eq("project_id", projectId).order("number", { ascending: true }),
+      supabase.from("commitments").select("id, vendor_name, title, number").eq("project_id", projectId),
+    ]);
+    setChangeOrders(ce.data || []);
+    setCommitments(c.data || []);
     setLoading(false);
+  };
+
+  const promoteToContractCO = async (ce: any) => {
+    if (!confirm(`Promote "${ce.title}" to a Prime Contract CO?`)) return;
+    setPromoting(true);
+    try {
+      const { count } = await supabase.from("contract_change_orders").select("id", { count: "exact", head: true }).eq("project_id", projectId);
+      await supabase.from("contract_change_orders").insert({
+        project_id: projectId,
+        number: String((count || 0) + 1),
+        title: ce.title,
+        description: ce.description,
+        amount: ce.cost_impact || 0,
+        status: "draft",
+        reason: ce.type,
+        change_event_id: ce.id,
+      });
+      alert("Contract CO created — go to Prime Contracts to review.");
+    } catch (e: any) { alert(e.message); }
+    setPromoting(false);
+  };
+
+  const promoteToCommitmentCO = async (ce: any, commitmentId: string) => {
+    setPromoting(true);
+    try {
+      const { count } = await supabase.from("commitment_change_orders").select("id", { count: "exact", head: true }).eq("project_id", projectId);
+      await supabase.from("commitment_change_orders").insert({
+        project_id: projectId,
+        number: String((count || 0) + 1),
+        title: ce.title,
+        description: ce.description,
+        amount: ce.cost_impact || 0,
+        status: "draft",
+        reason: ce.type,
+        commitment_id: commitmentId,
+        change_event_id: ce.id,
+      });
+      alert("Commitment CO created — go to Commitments to review.");
+    } catch (e: any) { alert(e.message); }
+    setPromoting(false);
   };
   useEffect(() => { load(); }, [projectId]);
 
@@ -190,6 +236,29 @@ export default function ChangeEventsPage() {
                 </div>
               </div>
             )}
+            {/* Promote to CO actions */}
+            <div className="pt-3 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Promote to Change Order</p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => promoteToContractCO(selected)}
+                  disabled={promoting}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-navy text-white hover:bg-brand-navy/90 disabled:opacity-60"
+                >
+                  → Prime Contract CO
+                </button>
+                {commitments.length > 0 && (
+                  <select
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 bg-white"
+                    defaultValue=""
+                    onChange={(e) => { if (e.target.value) promoteToCommitmentCO(selected, e.target.value); e.target.value = ""; }}
+                  >
+                    <option value="">→ Commitment CO (select sub)...</option>
+                    {commitments.map((c) => <option key={c.id} value={c.id}>{c.vendor_name || c.title} #{c.number}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
             <button onClick={() => openEdit(selected)} className="px-4 py-2 bg-brand-orange text-white text-sm font-medium rounded-lg hover:bg-orange-600">Edit</button>
           </div>
         )}
